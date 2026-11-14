@@ -1,4 +1,4 @@
-const CACHE_NAME = "brodal-inventory-v6";
+const CACHE_NAME = "brodal-inventory-v7";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -6,7 +6,9 @@ const APP_SHELL = [
   "./app.js",
   "./firebase-config.js",
   "./manifest.json",
-  "./images/logo.png"
+  "./images/logo.png",
+  "./images/app-icon.png",
+  "./images/app-icon.svg"
 ];
 const RUNTIME_CACHE = "brodal-runtime-v1";
 
