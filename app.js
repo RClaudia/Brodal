@@ -32,7 +32,7 @@ const state = {
   inventory: [],
   selectedCategory: "All",
   search: "",
-  sortBy: "name",
+  sortBy: "sku",
   sortDirection: 1,
   editingId: null,
   imageBase64: "",
@@ -790,13 +790,19 @@ function getFilteredInventory() {
       || String(item.name ?? "").toLocaleLowerCase().includes(search)
       || String(item.color ?? "").toLocaleLowerCase().includes(search))
     .sort((a, b) => {
-      const first = a[state.sortBy] ?? "";
-      const second = b[state.sortBy] ?? "";
+      const first = state.sortBy === "sku" ? inventorySku(a) : a[state.sortBy] ?? "";
+      const second = state.sortBy === "sku" ? inventorySku(b) : b[state.sortBy] ?? "";
       const comparison = typeof first === "number" && typeof second === "number"
         ? first - second
         : String(first).localeCompare(String(second), undefined, { numeric: true, sensitivity: "base" });
       return comparison * state.sortDirection;
     });
+}
+
+function inventorySku(item) {
+  const sku = String(item.sku ?? "").trim();
+  if (sku) return sku;
+  return String(state.catalog.find((product) => product.id === item.productId)?.sku ?? "").trim();
 }
 
 function availableFor(item) {
