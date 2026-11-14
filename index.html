@@ -58,9 +58,6 @@
           <nav id="primary-navigation" class="primary-navigation" aria-label="Main navigation">
             <button id="workspace-button" class="button button-quiet" type="button">Home</button>
             <button id="settings-button" class="button button-quiet settings-button" type="button">Settings</button>
-            <button id="inventory-module-button" class="button button-quiet" type="button">Inventory</button>
-            <button id="dashboard-page-button" class="button button-quiet" type="button">Markets</button>
-            <button id="items-page-button" class="button button-quiet" type="button">Items</button>
           </nav>
           <button id="logout-button" class="button button-quiet" type="button">Log out</button>
         </div>
@@ -77,6 +74,14 @@
             <span class="workspace-card-copy">
               <strong>Inventory</strong>
               <small>Manage your markets, items, and other inventory.</small>
+            </span>
+            <span class="workspace-arrow" aria-hidden="true">›</span>
+          </button>
+          <button class="workspace-card workspace-card-history" type="button" data-home-page="market-history">
+            <span class="workspace-icon" aria-hidden="true">▤</span>
+            <span class="workspace-card-copy">
+              <strong>Market history</strong>
+              <small>Review past markets, income, and items sold by year.</small>
             </span>
             <span class="workspace-arrow" aria-hidden="true">›</span>
           </button>
@@ -404,6 +409,11 @@
         <section class="settings-section" aria-labelledby="market-settings-title">
           <div class="settings-section-heading"><h3 id="market-settings-title">Markets</h3><p class="muted">Manage market records and their inventory.</p></div>
           <div class="settings-card-grid">
+            <button class="settings-action-card" data-settings-action="add-past-market" type="button">
+              <span class="settings-action-icon" aria-hidden="true">＋</span>
+              <span><strong>Add past market</strong><small>Enter historical market dates, details, income, and items sold.</small></span>
+              <span class="settings-action-arrow" aria-hidden="true">›</span>
+            </button>
             <button class="settings-action-card" data-settings-action="edit-event" type="button">
               <span class="settings-action-icon" aria-hidden="true">✎</span>
               <span><strong>Edit market</strong><small>Rename or update the selected market’s details.</small></span>
@@ -899,6 +909,46 @@
         <div class="dialog-actions">
           <button class="button button-quiet" data-close-dialog="market-close-dialog" type="button">Cancel</button>
           <button id="confirm-market-close-button" class="button button-primary" type="submit">Close market</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="past-market-dialog" class="app-dialog">
+      <form id="past-market-form" class="dialog-content">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">MARKET HISTORY</p>
+            <h2>Add past market</h2>
+          </div>
+          <button class="icon-button" data-close-dialog="past-market-dialog" type="button" aria-label="Close">×</button>
+        </div>
+        <p class="helper-text">Enter a past market without changing your product inventory. The total income is calculated from cash and bank income.</p>
+        <div class="form-row">
+          <label>Year<select id="past-market-year" name="year" required></select></label>
+          <label>Number of days<input name="durationDays" type="number" min="1" step="1" value="1" required></label>
+        </div>
+        <div class="form-row">
+          <label>Start date<input name="startDate" type="date" required></label>
+          <label>End date<input name="endDate" type="date" required></label>
+        </div>
+        <label>Market name<input name="name" type="text" maxlength="100" placeholder="e.g. Christmas Craft Fair" required></label>
+        <label>Location<input name="location" type="text" maxlength="120" required></label>
+        <div class="form-row">
+          <label>Organizer<input name="organizer" type="text" maxlength="120" required></label>
+          <label>Edition<input name="edition" type="text" maxlength="80" required></label>
+        </div>
+        <div class="form-row">
+          <label>Cash income (RON)<input name="cashIncome" type="number" min="0" step="0.01" inputmode="decimal" value="0" required></label>
+          <label>Bank income (RON)<input name="bankIncome" type="number" min="0" step="0.01" inputmode="decimal" value="0" required></label>
+        </div>
+        <div class="form-row">
+          <label>Total income (RON)<input id="past-market-total-income" type="text" value="0 RON" readonly></label>
+          <label>Total items sold<input name="totalItemsSold" type="number" min="0" step="1" inputmode="numeric" value="0" required></label>
+        </div>
+        <p id="past-market-error" class="form-error" role="alert" hidden></p>
+        <div class="dialog-actions">
+          <button class="button button-quiet" data-close-dialog="past-market-dialog" type="button">Cancel</button>
+          <button id="save-past-market-button" class="button button-primary" type="submit">Save past market</button>
         </div>
       </form>
     </dialog>

@@ -44,7 +44,7 @@ service cloud.firestore {
       allow create: if isOwner()
         && request.resource.data.keys().hasOnly([
           "name", "type", "startDate", "endDate", "location", "organizer", "edition",
-          "status", "cashIncome", "bankIncome", "totalItemsSold", "createdAt"
+          "status", "cashIncome", "bankIncome", "totalItemsSold", "durationDays", "createdAt", "closedAt"
         ])
         && request.resource.data.name is string
         && request.resource.data.type in ["Market", "Shop Update"]
@@ -54,13 +54,17 @@ service cloud.firestore {
         && request.resource.data.location is string
         && request.resource.data.organizer is string
         && request.resource.data.edition is string
-        && request.resource.data.status == "open"
+        && request.resource.data.status in ["open", "closed"]
         && request.resource.data.cashIncome is number
         && request.resource.data.cashIncome >= 0
         && request.resource.data.bankIncome is number
         && request.resource.data.bankIncome >= 0
         && request.resource.data.totalItemsSold is int
         && request.resource.data.totalItemsSold >= 0
+        && (!("durationDays" in request.resource.data)
+          || (request.resource.data.durationDays is int && request.resource.data.durationDays > 0))
+        && (!("closedAt" in request.resource.data)
+          || (request.resource.data.closedAt == request.time && request.resource.data.status == "closed"))
         && request.resource.data.createdAt == request.time;
       allow update, delete: if isOwner();
     }

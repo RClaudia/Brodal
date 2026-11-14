@@ -76,6 +76,7 @@ const loginScreen = $("#login-screen");
 const appShell = $("#app-shell");
 const eventDialog = $("#event-dialog");
 const marketCloseDialog = $("#market-close-dialog");
+const pastMarketDialog = $("#past-market-dialog");
 const inventoryDialog = $("#inventory-dialog");
 const productPickerDialog = $("#product-picker-dialog");
 const productQuantityDialog = $("#product-quantity-dialog");
@@ -171,6 +172,7 @@ function soldQuantityForMarket(items) {
 }
 
 function marketDurationDays(event) {
+  if (Number.isInteger(event.durationDays) && event.durationDays > 0) return event.durationDays;
   const start = String(event.startDate ?? event.date ?? "");
   const end = String(event.endDate ?? event.date ?? start);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) return 0;
@@ -627,15 +629,108 @@ function showPage(name) {
   $("#items-page").hidden = name !== "items";
   $("#settings-page").hidden = name !== "settings";
   $(".mobile-action-bar").hidden = name !== "dashboard";
-  $("#inventory-module-button").setAttribute("aria-current",
-    ["inventory-home", "dashboard", "items"].includes(name) ? "page" : "false");
-  $("#dashboard-page-button").setAttribute("aria-current", name === "dashboard" ? "page" : "false");
-  $("#items-page-button").setAttribute("aria-current", name === "items" ? "page" : "false");
   $("#settings-button").setAttribute("aria-current", name === "settings" ? "page" : "false");
   $("#workspace-button").setAttribute("aria-current", name === "hub" ? "page" : "false");
   if (name === "items") renderCatalog();
   if (name === "accounting") renderAccounting();
   if (name === "market-history") void loadMarketHistoryInventoryTotals();
+}
+
+function populatePastMarketYears() {
+  const select = $("#past-market-year");
+  const currentYear = new Date().getFullYear();
+  select.innerHTML = Array.from({ length: currentYear + 5 - 1980 + 1 }, (_, index) => {
+    const year = currentYear + 5 - index;
+    return `<option value="${year}">${year}</option>`;
+  }).join("");
+  select.value = String(currentYear);
+}
+
+function syncPastMarketDates() {
+  const form = $("#past-market-form");
+  const year = form.elements.year.value;
+  const start = form.elements.startDate.value;
+  const end = form.elements.endDate.value;
+  if (start && end && start.slice(0, 4) === year && end.slice(0, 4) === year && end >= start) {
+    const days = Math.floor((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86400000) + 1;
+    form.elements.durationDays.value = String(days);
+  }
+}
+
+function updatePastMarketTotalIncome() {
+  const form = $("#past-market-form");
+  const cash = Number(form.elements.cashIncome.value);
+  const bank = Number(form.elements.bankIncome.value);
+  $("#past-market-total-income").value = money.format(
+    (Number.isFinite(cash) ? cash : 0) + (Number.isFinite(bank) ? bank : 0)
+  );
+}
+
+function openPastMarketDialog() {
+  const form = $("#past-market-form");
+  form.reset();
+  populatePastMarketYears();
+  const year = form.elements.year.value;
+  form.elements.startDate.value = `${year}-01-01`;
+  form.elements.endDate.value = `${year}-01-01`;
+  form.elements.durationDays.value = "1";
+  updatePastMarketTotalIncome();
+  clearError($("#past-market-error"));
+  pastMarketDialog.showModal();
+}
+
+async function handlePastMarketSubmit(event) {
+  event.preventDefault();
+  const form = $("#past-market-form");
+  const button = $("#save-past-market-button");
+  const errorElement = $("#past-market-error");
+  clearError(errorElement);
+  button.disabled = true;
+  try {
+    const values = new FormData(form);
+    const year = String(values.get("year"));
+    const startDate = String(values.get("startDate"));
+    const endDate = String(values.get("endDate"));
+    const durationDays = Number(values.get("durationDays"));
+    const cashIncome = Number(values.get("cashIncome"));
+    const bankIncome = Number(values.get("bankIncome"));
+    const totalItemsSold = Number(values.get("totalItemsSold"));
+    if (!/^\d{4}$/.test(year) || startDate.slice(0, 4) !== year || endDate.slice(0, 4) !== year) {
+      throw new Error("The start and end dates must both belong to the selected year.");
+    }
+    if (endDate < startDate) throw new Error("The end date must be the same as or later than the start date.");
+    if (!Number.isInteger(durationDays) || durationDays < 1) throw new Error("Number of days must be a positive whole number.");
+    if (![cashIncome, bankIncome].every((amount) => Number.isFinite(amount) && amount >= 0)) {
+      throw new Error("Enter valid non-negative cash and bank income amounts.");
+    }
+    if (!Number.isInteger(totalItemsSold) || totalItemsSold < 0) {
+      throw new Error("Total items sold must be a whole number of zero or more.");
+    }
+
+    await addDoc(collection(db, "events"), {
+      name: String(values.get("name")).trim(),
+      type: "Market",
+      startDate,
+      endDate,
+      durationDays,
+      location: String(values.get("location")).trim(),
+      organizer: String(values.get("organizer")).trim(),
+      edition: String(values.get("edition")).trim(),
+      status: "closed",
+      cashIncome,
+      bankIncome,
+      totalItemsSold,
+      createdAt: serverTimestamp(),
+      closedAt: serverTimestamp()
+    });
+    pastMarketDialog.close();
+    toast(`Past market added to ${year} history.`);
+  } catch (error) {
+    console.error("Could not add past market history.", error);
+    showError(errorElement, error.message);
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function localDateString(date = new Date()) {
@@ -2461,7 +2556,6 @@ function initializeAppUi() {
   $("#import-csv-button").addEventListener("click", () => void importMarketFromCsv());
 
   $("#workspace-button").addEventListener("click", () => showPage("hub"));
-  $("#inventory-module-button").addEventListener("click", () => showPage("inventory-home"));
   $("#mobile-menu-toggle").addEventListener("click", () => {
     const expanded = $("#mobile-menu-toggle").getAttribute("aria-expanded") === "true";
     $("#mobile-menu-toggle").setAttribute("aria-expanded", String(!expanded));
@@ -2480,11 +2574,11 @@ function initializeAppUi() {
     if (card?.dataset.module === "inventory") showPage("inventory-home");
     if (card?.dataset.module === "accounting") showPage("accounting");
     if (event.target.closest('[data-home-page="items"]')) showPage("items");
+    if (event.target.closest('[data-home-page="market-history"]')) showPage("market-history");
   });
   $("#inventory-home-page").addEventListener("click", (event) => {
     if (event.target.closest('[data-inventory-page="markets"]')) showPage("dashboard");
   });
-  $("#dashboard-page-button").addEventListener("click", () => showPage("dashboard"));
   $("#market-history-button").addEventListener("click", () => showPage("market-history"));
   $("#market-inventory-button").addEventListener("click", () => showPage("dashboard"));
   $("#market-history-year").addEventListener("change", (event) => {
@@ -2494,7 +2588,18 @@ function initializeAppUi() {
   $("#close-market-button").addEventListener("click", openMarketCloseDialog);
   $("#refresh-market-total-button").addEventListener("click", () => void refreshMarketSoldTotal());
   $("#market-close-form").addEventListener("submit", handleMarketCloseSubmit);
-  $("#items-page-button").addEventListener("click", () => showPage("items"));
+  $("#past-market-form").addEventListener("submit", handlePastMarketSubmit);
+  $("#past-market-year").addEventListener("change", (event) => {
+    const form = $("#past-market-form");
+    const year = event.currentTarget.value;
+    form.elements.startDate.value = `${year}-01-01`;
+    form.elements.endDate.value = `${year}-01-01`;
+    form.elements.durationDays.value = "1";
+  });
+  $("#past-market-form").elements.startDate.addEventListener("change", syncPastMarketDates);
+  $("#past-market-form").elements.endDate.addEventListener("change", syncPastMarketDates);
+  $("#past-market-form").elements.cashIncome.addEventListener("input", updatePastMarketTotalIncome);
+  $("#past-market-form").elements.bankIncome.addEventListener("input", updatePastMarketTotalIncome);
   $("#settings-button").addEventListener("click", () => {
     $("#settings-page-email").textContent = state.user?.email ?? "";
     showPage("settings");
@@ -2503,6 +2608,7 @@ function initializeAppUi() {
     const button = event.target.closest("[data-settings-action]");
     if (!button) return;
     const { settingsAction } = button.dataset;
+    if (settingsAction === "add-past-market") openPastMarketDialog();
     if (settingsAction === "edit-event") {
       if (state.activeEventId) openSettingsDialog();
       else toast("Choose a market before editing one.", true);
@@ -2739,7 +2845,7 @@ function initializeAppUi() {
   document.querySelectorAll("[data-close-dialog]").forEach((button) => {
     button.addEventListener("click", () => document.getElementById(button.dataset.closeDialog).close());
   });
-  [eventDialog, inventoryDialog, settingsDialog, importDialog, accountDialog, accountingDialog, productPickerDialog, productQuantityDialog, catalogItemDialog, categoryDialog].forEach((dialog) => {
+  [eventDialog, inventoryDialog, settingsDialog, importDialog, accountDialog, accountingDialog, productPickerDialog, productQuantityDialog, catalogItemDialog, categoryDialog, marketCloseDialog, pastMarketDialog].forEach((dialog) => {
     dialog.addEventListener("click", (event) => {
       if (event.target === dialog) dialog.close();
     });
