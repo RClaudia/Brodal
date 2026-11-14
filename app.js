@@ -58,6 +58,8 @@ const state = {
   accountingEntries: [],
   accountingUnsubscribe: null,
   accountingLoading: false,
+  accountingImportValidation: null,
+  accountingImportValidationKey: "",
   accountingYear: String(new Date().getFullYear()),
   accountingMonth: "all",
   accountingSearch: "",
@@ -81,6 +83,7 @@ const inventoryForm = $("#inventory-form");
 const eventForm = $("#event-form");
 const settingsForm = $("#settings-form");
 const accountingForm = $("#accounting-form");
+const accountingImportForm = $("#accounting-import-form");
 
 function showError(element, message) {
   element.textContent = message;
@@ -661,6 +664,189 @@ function openAccountingDialog(entry = null) {
   accountingDialog.showModal();
 }
 
+function openAccountingImportDialog() {
+  accountingImportForm.reset();
+  $("#accounting-import-year").value = String(new Date().getFullYear());
+  $("#accounting-import-preview").textContent = "Choose a year and CSV file to validate the rows before importing.";
+  clearError($("#accounting-import-error"));
+  state.accountingImportValidation = null;
+  state.accountingImportValidationKey = "";
+  $("#accounting-import-dialog").showModal();
+}
+
+function accountingImportKey(file, year) {
+  return `${file.name}:${file.size}:${file.lastModified}:${year}`;
+}
+
+function parseAccountingImportDate(value, rowNumber) {
+  const dateValue = String(value ?? "").trim();
+  let year;
+  let month;
+  let day;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+    [year, month, day] = dateValue.split("-").map(Number);
+  } else if (/^\d{2}\.\d{2}\.\d{4}$/.test(dateValue)) {
+    [day, month, year] = dateValue.split(".").map(Number);
+  } else {
+    throw new Error(`Row ${rowNumber}: Data Operatiunii must be YYYY-MM-DD or DD.MM.YYYY.`);
+  }
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    throw new Error(`Row ${rowNumber}: Data Operatiunii is not a valid date.`);
+  }
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function parseAccountingImportAmount(value, fieldName, rowNumber) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return 0;
+  if (!/^-?\d+(?:[.,]\d{1,2})?$/.test(normalized)) {
+    throw new Error(`Row ${rowNumber}: ${fieldName} must be a number with up to two decimal places.`);
+  }
+  const amount = Number(normalized.replace(",", "."));
+  if (!Number.isFinite(amount)) throw new Error(`Row ${rowNumber}: ${fieldName} is not a valid number.`);
+  return amount;
+}
+
+function accountingEntriesFromCsv(text, selectedYear) {
+  if (!/^\d{4}$/.test(selectedYear)) throw new Error("Choose a valid four-digit year.");
+  const [headers, ...rows] = parseCsv(text);
+  const columns = new Map(headers.map((header, index) => [normalizeCsvHeader(header), index]));
+  if (columns.size !== headers.length) throw new Error("The CSV header contains duplicate or empty column names.");
+  const required = [
+    "nrcrt", "dataoperatiunii", "document", "explicatii",
+    "incasarinumerar", "incasaribanca", "platinumerar", "platibanca"
+  ];
+  const missing = required.filter((header) => !columns.has(header));
+  if (missing.length) {
+    throw new Error(`Missing required CSV column${missing.length === 1 ? "" : "s"}: ${missing.join(", ")}.`);
+  }
+
+  const read = (cells, column) => (cells[columns.get(column)] ?? "").trim();
+  const seenNumbers = new Set();
+  const warnings = [];
+  const entries = rows.map((cells, index) => {
+    const rowNumber = index + 2;
+    if (cells.length !== headers.length) throw new Error(`Row ${rowNumber}: expected ${headers.length} columns, found ${cells.length}.`);
+    const nrCrtText = read(cells, "nrcrt");
+    const nrCrt = Number(nrCrtText);
+    if (!/^\d+$/.test(nrCrtText) || !Number.isSafeInteger(nrCrt) || nrCrt < 1) {
+      throw new Error(`Row ${rowNumber}: Nr. crt. must be a positive whole number.`);
+    }
+    if (seenNumbers.has(nrCrt)) throw new Error(`Row ${rowNumber}: Nr. crt. ${nrCrt} appears more than once in this CSV.`);
+    seenNumbers.add(nrCrt);
+    const dataOperatiunii = parseAccountingImportDate(read(cells, "dataoperatiunii"), rowNumber);
+    if (dataOperatiunii.slice(0, 4) !== selectedYear) {
+      throw new Error(`Row ${rowNumber}: date ${dataOperatiunii} does not match selected year ${selectedYear}.`);
+    }
+    const explicatii = read(cells, "explicatii");
+    if (!explicatii) throw new Error(`Row ${rowNumber}: Explicatii cannot be empty.`);
+    const document = read(cells, "document");
+    if (!document) warnings.push(`entry ${nrCrt} has an empty Document`);
+    return {
+      nrCrt,
+      dataOperatiunii,
+      document,
+      explicatii,
+      incasariNumerar: parseAccountingImportAmount(read(cells, "incasarinumerar"), "Incasari Numerar", rowNumber),
+      incasariBanca: parseAccountingImportAmount(read(cells, "incasaribanca"), "Incasari Banca", rowNumber),
+      platiNumerar: parseAccountingImportAmount(read(cells, "platinumerar"), "Plati Numerar", rowNumber),
+      platiBanca: parseAccountingImportAmount(read(cells, "platibanca"), "Plati Banca", rowNumber)
+    };
+  });
+  if (!entries.length) throw new Error("The CSV contains no accounting entries.");
+  const signedCorrections = entries.filter((entry) =>
+    entry.incasariNumerar < 0 || entry.incasariBanca < 0 || entry.platiNumerar < 0 || entry.platiBanca < 0
+  ).length;
+  if (signedCorrections) warnings.push(`${signedCorrections} entr${signedCorrections === 1 ? "y has" : "ies have"} negative correction amount(s)`);
+  return { entries, warnings };
+}
+
+async function previewAccountingImport() {
+  const file = $("#accounting-import-file").files?.[0];
+  const year = $("#accounting-import-year").value.trim();
+  state.accountingImportValidation = null;
+  state.accountingImportValidationKey = "";
+  clearError($("#accounting-import-error"));
+  if (!file) {
+    $("#accounting-import-preview").textContent = "Choose a year and CSV file to validate the rows before importing.";
+    return;
+  }
+  try {
+    const validation = accountingEntriesFromCsv(await file.text(), year);
+    const key = accountingImportKey(file, year);
+    state.accountingImportValidation = validation;
+    state.accountingImportValidationKey = key;
+    const warning = validation.warnings.length ? ` Review: ${validation.warnings.join("; ")}.` : "";
+    $("#accounting-import-preview").textContent = `${validation.entries.length} entries validated for ${year}.${warning} Import will append these entries; existing entry numbers will not be overwritten.`;
+  } catch (error) {
+    $("#accounting-import-preview").textContent = "";
+    showError($("#accounting-import-error"), error.message);
+  }
+}
+
+async function handleAccountingImportSubmit(event) {
+  event.preventDefault();
+  const button = $("#accounting-import-button");
+  const errorElement = $("#accounting-import-error");
+  clearError(errorElement);
+  const file = $("#accounting-import-file").files?.[0];
+  const year = $("#accounting-import-year").value.trim();
+  if (!file) {
+    showError(errorElement, "Choose an accounting CSV file to import.");
+    return;
+  }
+  const key = accountingImportKey(file, year);
+  let validation = state.accountingImportValidationKey === key ? state.accountingImportValidation : null;
+  try {
+    if (!validation) validation = accountingEntriesFromCsv(await file.text(), year);
+    const { entries, warnings } = validation;
+    if (!navigator.onLine) throw new Error("Connect to the internet before importing accounting entries.");
+    const existingSnapshot = await getDocsFromServer(collection(db, "accounting_entries"));
+    const existingNumbers = new Set(existingSnapshot.docs
+      .map((item) => item.data())
+      .filter((entry) => String(entry.dataOperatiunii ?? "").slice(0, 4) === year)
+      .map((entry) => Number(entry.nrCrt)));
+    const collision = entries.find((entry) => existingNumbers.has(entry.nrCrt));
+    if (collision) {
+      throw new Error(`Entry number ${collision.nrCrt} already exists for ${year}. No rows were imported; resolve the number conflict and retry.`);
+    }
+    const warningText = warnings.length ? `\n\nCSV notes: ${warnings.join("; ")}.` : "";
+    if (!window.confirm(`Append ${entries.length} accounting entries for ${year}? Existing entries will not be changed.${warningText}`)) return;
+
+    button.disabled = true;
+    let importedCount = 0;
+    try {
+      for (let start = 0; start < entries.length; start += 450) {
+        const batch = writeBatch(db);
+        entries.slice(start, start + 450).forEach((entry) => {
+          batch.set(doc(collection(db, "accounting_entries")), {
+            ...entry,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          });
+        });
+        await batch.commit();
+        importedCount += entries.slice(start, start + 450).length;
+      }
+    } catch (error) {
+      console.error("Could not complete accounting CSV import.", error);
+      throw new Error(`Import stopped after ${importedCount} of ${entries.length} entries: ${error.message}`);
+    }
+    state.accountingYear = year;
+    state.accountingMonth = "all";
+    $("#accounting-month-filter").value = "all";
+    $("#accounting-import-dialog").close();
+    toast(`Imported ${importedCount} accounting entries for ${year}.`);
+    renderAccounting();
+  } catch (error) {
+    console.error("Could not import accounting CSV.", error);
+    showError(errorElement, error.message);
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function handleAccountingSubmit(event) {
   event.preventDefault();
   const submitButton = $("#accounting-save-button");
@@ -693,8 +879,8 @@ async function handleAccountingSubmit(event) {
       platiBanca: Number(formData.get("platiBanca")),
       updatedAt: serverTimestamp()
     };
-    if (Object.values(payload).some((value) => typeof value === "number" && (!Number.isFinite(value) || value < 0))) {
-      throw new Error("Sumele trebuie să fie numere pozitive sau zero.");
+    if (Object.values(payload).some((value) => typeof value === "number" && !Number.isFinite(value))) {
+      throw new Error("Sumele trebuie să fie valori numerice valide.");
     }
     if (state.editingAccountingId) {
       await updateDoc(doc(db, "accounting_entries", state.editingAccountingId), payload);
@@ -2073,6 +2259,9 @@ function initializeAppUi() {
     if (settingsAction === "import-event") {
       openImportDialog();
     }
+    if (settingsAction === "import-accounting") openAccountingImportDialog();
+    if (settingsAction === "open-accounting") showPage("accounting");
+    if (settingsAction === "open-items") showPage("items");
     if (settingsAction === "account") {
       $("#account-dialog-email").textContent = state.user?.email ?? "";
       accountDialog.showModal();
@@ -2233,6 +2422,9 @@ function initializeAppUi() {
   $("#accounting-mobile-list").addEventListener("click", onAccountingAction);
   $("#accounting-table-body").addEventListener("click", onAccountingAction);
   accountingForm.addEventListener("submit", handleAccountingSubmit);
+  accountingImportForm.addEventListener("submit", handleAccountingImportSubmit);
+  $("#accounting-import-file").addEventListener("change", () => void previewAccountingImport());
+  $("#accounting-import-year").addEventListener("input", () => void previewAccountingImport());
   accountingForm.elements.nrCrt.addEventListener("input", () => {
     state.accountingNumberEdited = true;
   });

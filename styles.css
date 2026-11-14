@@ -283,6 +283,7 @@ input[type="checkbox"] { width: 18px; min-height: 18px; height: 18px; accent-col
 .settings-section + .settings-section { padding-top: 18px; border-top: 1px solid var(--line); }
 .settings-section-heading h3, .account-section h3 { margin: 0 0 4px; font-size: 0.96rem; }
 .settings-section-heading p, .account-section p { margin: 0; font-size: 0.78rem; }
+.accounting-import-preview { margin: 0; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft); color: #526771; font-size: 0.8rem; line-height: 1.5; overflow-wrap: anywhere; }
 .settings-warning { margin: 0; }
 .account-detail { display: grid; gap: 5px; padding: 14px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-soft); }
 .account-detail > span, .account-detail > p { margin: 0; font-size: 0.78rem; }
