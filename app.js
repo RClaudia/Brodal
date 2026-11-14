@@ -11,6 +11,7 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  getDocsFromServer,
   onSnapshot,
   query,
   serverTimestamp,
@@ -22,7 +23,7 @@ import {
 import { auth, db, isFirebaseConfigured } from "./firebase-config.js";
 
 const $ = (selector) => document.querySelector(selector);
-const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+const money = new Intl.NumberFormat("ro-RO", { style: "currency", currency: "RON" });
 const state = {
   user: null,
   events: [],
@@ -43,8 +44,10 @@ const loginScreen = $("#login-screen");
 const appShell = $("#app-shell");
 const eventDialog = $("#event-dialog");
 const inventoryDialog = $("#inventory-dialog");
+const settingsDialog = $("#settings-dialog");
 const inventoryForm = $("#inventory-form");
 const eventForm = $("#event-form");
+const settingsForm = $("#settings-form");
 
 function showError(element, message) {
   element.textContent = message;
@@ -105,17 +108,23 @@ function configureLogin() {
 
 function sortEvents(events) {
   return [...events].sort((a, b) => {
-    const dateOrder = String(b.date ?? "").localeCompare(String(a.date ?? ""));
+    const dateOrder = String(b.startDate ?? b.date ?? "").localeCompare(String(a.startDate ?? a.date ?? ""));
     if (dateOrder !== 0) return dateOrder;
     return String(b.name ?? "").localeCompare(String(a.name ?? ""));
   });
+}
+
+function eventDateRange(event) {
+  const startDate = event.startDate ?? event.date ?? "";
+  const endDate = event.endDate ?? "";
+  return endDate && endDate !== startDate ? `${startDate} – ${endDate}` : startDate;
 }
 
 function renderEvents() {
   const select = $("#event-select");
   const selectedId = state.activeEventId;
   select.innerHTML = state.events.length
-    ? state.events.map((event) => `<option value="${escapeHtml(event.id)}">${escapeHtml(event.type)} · ${escapeHtml(event.name)} · ${escapeHtml(event.date)}</option>`).join("")
+    ? state.events.map((event) => `<option value="${escapeHtml(event.id)}">${escapeHtml(event.type)} · ${escapeHtml(event.name)} · ${escapeHtml(eventDateRange(event))}</option>`).join("")
     : '<option value="">No events yet — create your first event</option>';
   select.disabled = state.events.length === 0;
 
@@ -126,6 +135,9 @@ function renderEvents() {
     select.value = state.activeEventId;
   }
 
+  $("#add-inventory-button").disabled = !state.activeEventId;
+  $("#mobile-add-button").disabled = !state.activeEventId;
+  $("#settings-button").disabled = !state.activeEventId;
   renderActiveEvent();
   subscribeToInventory();
 }
@@ -137,7 +149,7 @@ function renderActiveEvent() {
   if (!event) return;
   $("#event-type").textContent = event.type;
   $("#event-name").textContent = event.name;
-  $("#event-details").textContent = [event.date, event.location].filter(Boolean).join(" · ");
+  $("#event-details").textContent = [eventDateRange(event), event.location].filter(Boolean).join(" · ");
 }
 
 function subscribeToEvents() {
@@ -224,6 +236,16 @@ function soldControls(item) {
   </span>`;
 }
 
+function totalQuantityControls(item) {
+  const total = numberValue(item.totalQty);
+  const sold = numberValue(item.soldQty);
+  return `<span class="sold-control">
+    <button class="stepper-button" type="button" data-action="total-minus" data-id="${escapeHtml(item.id)}" aria-label="Remove one from stock for ${escapeHtml(item.name)}" ${total <= sold ? "disabled" : ""}>−</button>
+    <strong>${total}</strong>
+    <button class="stepper-button" type="button" data-action="total-plus" data-id="${escapeHtml(item.id)}" aria-label="Add one to stock for ${escapeHtml(item.name)}">+</button>
+  </span>`;
+}
+
 function productActions(item) {
   return `<span class="row-actions">
     <button class="text-button" type="button" data-action="edit" data-id="${escapeHtml(item.id)}">Edit</button>
@@ -283,7 +305,7 @@ function renderInventory() {
     $("#empty-description").textContent = event
       ? "Add your first product to keep its stock and sales close at hand."
       : "Set up a market or shop update before adding products.";
-    $("#empty-add-button").textContent = event ? "＋ Add your first product" : "＋ New Market / Shop Update";
+    $("#empty-add-button").textContent = event ? "＋ Add your first product" : "＋ New Event";
     $("#empty-add-button").dataset.action = event ? "add" : "new-event";
   } else if (filtered.length === 0) {
     $("#empty-title").textContent = "No matching products";
@@ -318,8 +340,12 @@ function renderInventory() {
         <div class="product-stat"><span>Money made</span><strong>${money.format(revenue)}</strong></div>
         <div class="product-stat"><span>Total price</span><strong>${money.format(potential)}</strong></div>
       </div>
+      <div class="product-card-quantities">
+        <div class="product-quantity-control"><span>In stock</span>${totalQuantityControls(item)}</div>
+        <div class="product-quantity-control"><span>Sold</span>${soldControls(item)}</div>
+      </div>
       <div class="product-card-bottom">
-        <span class="sold-label">Sold ${sold}${total ? ` of ${total}` : ""}${soldControls(item)}</span>
+        <span class="sold-label">${sold} sold of ${total}</span>
         <span class="mobile-card-actions">${productActions(item)}</span>
       </div>
     </article>`;
@@ -335,7 +361,7 @@ function renderInventory() {
       <td class="product-name-cell" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</td>
       <td>${escapeHtml(item.category)}</td>
       <td>${money.format(numberValue(item.price))}</td>
-      <td>${total}</td>
+      <td>${totalQuantityControls(item)}</td>
       <td><span class="available-badge ${availableClass(available, total)}">${available}</span></td>
       <td>${soldControls(item)}</td>
       <td>${money.format(numberValue(item.price) * sold)}</td>
@@ -403,13 +429,254 @@ function openInventoryDialog(item = null) {
 function openNewEventDialog() {
   eventForm.reset();
   const today = new Date();
-  eventForm.elements.date.value = [
+  const todayValue = [
     today.getFullYear(),
     String(today.getMonth() + 1).padStart(2, "0"),
     String(today.getDate()).padStart(2, "0")
   ].join("-");
+  eventForm.elements.startDate.value = todayValue;
+  eventForm.elements.endDate.value = todayValue;
   clearError($("#event-form-error"));
   eventDialog.showModal();
+}
+
+function openSettingsDialog() {
+  const event = state.events.find((item) => item.id === state.activeEventId);
+  settingsForm.reset();
+  clearError($("#settings-form-error"));
+  $("#settings-event-hint").textContent = event
+    ? "Edit this event or remove it and its inventory."
+    : "Create or choose an event to manage it.";
+  $("#settings-account-email").textContent = state.user?.email ?? "Signed in";
+
+  $("#selected-event-settings").querySelectorAll("input, select").forEach((field) => {
+    field.disabled = !event;
+  });
+  $("#delete-event-button").disabled = !event;
+  $("#save-settings-button").disabled = !event;
+  if (event) {
+    settingsForm.elements.name.value = event.name ?? "";
+    settingsForm.elements.type.value = event.type ?? "Market";
+    settingsForm.elements.startDate.value = event.startDate ?? event.date ?? "";
+    settingsForm.elements.endDate.value = event.endDate ?? event.date ?? "";
+    settingsForm.elements.location.value = event.location ?? "";
+  }
+  const today = new Date();
+  const todayValue = [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, "0"),
+    String(today.getDate()).padStart(2, "0")
+  ].join("-");
+  $("#import-event-start-date").value = todayValue;
+  $("#import-event-end-date").value = todayValue;
+  $("#import-event-name").value = "";
+  $("#import-event-location").value = "";
+  $("#import-event-type").value = "Market";
+  $("#import-csv-file").value = "";
+  clearError($("#import-form-error"));
+  settingsDialog.showModal();
+}
+
+function parseCsv(text) {
+  const source = text.replace(/^\uFEFF/, "");
+  const rows = [];
+  let row = [];
+  let field = "";
+  let insideQuotes = false;
+
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    if (insideQuotes) {
+      if (character === '"' && source[index + 1] === '"') {
+        field += '"';
+        index += 1;
+      } else if (character === '"') {
+        insideQuotes = false;
+      } else {
+        field += character;
+      }
+    } else if (character === '"' && field.length === 0) {
+      insideQuotes = true;
+    } else if (character === ",") {
+      row.push(field);
+      field = "";
+    } else if (character === "\n" || character === "\r") {
+      if (character === "\r" && source[index + 1] === "\n") index += 1;
+      row.push(field);
+      if (row.some((cell) => cell.trim() !== "")) rows.push(row);
+      row = [];
+      field = "";
+    } else {
+      field += character;
+    }
+  }
+
+  if (insideQuotes) throw new Error("The CSV has an unfinished quoted field.");
+  if (field.length || row.length) {
+    row.push(field);
+    if (row.some((cell) => cell.trim() !== "")) rows.push(row);
+  }
+  if (rows.length < 2) throw new Error("The CSV must contain a header row and at least one product.");
+
+  return rows;
+}
+
+function normalizeCsvHeader(value) {
+  return String(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function parseCsvQuantity(value, fieldName, rowNumber) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return 0;
+  const number = Number(normalized);
+  if (!Number.isSafeInteger(number) || number < 0) {
+    throw new Error(`Row ${rowNumber}: ${fieldName} must be a non-negative whole number.`);
+  }
+  return number;
+}
+
+function parseCsvPrice(value, fieldName, rowNumber, optional = false) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized && optional) return 0;
+  if (!normalized) throw new Error(`Row ${rowNumber}: ${fieldName} cannot be empty.`);
+  let numberText = normalized.replace(/[^\d,.-]/g, "");
+  if (numberText.includes(",") && numberText.includes(".")) {
+    const decimalSeparator = numberText.lastIndexOf(",") > numberText.lastIndexOf(".") ? "," : ".";
+    const thousandsSeparator = decimalSeparator === "," ? "." : ",";
+    numberText = numberText.split(thousandsSeparator).join("");
+    if (decimalSeparator === ",") numberText = numberText.replace(",", ".");
+  } else if (numberText.includes(",")) {
+    numberText = numberText.replace(",", ".");
+  }
+  const number = Number(numberText);
+  if (!Number.isFinite(number) || number < 0) {
+    throw new Error(`Row ${rowNumber}: ${fieldName} must be a non-negative number.`);
+  }
+  return number;
+}
+
+function inventoryFromCsv(text) {
+  const [headers, ...rows] = parseCsv(text);
+  const columns = new Map(headers.map((header, index) => [normalizeCsvHeader(header), index]));
+  const required = ["sku", "productname", "category", "price", "totalqty"];
+  const missing = required.filter((header) => !columns.has(header));
+  if (missing.length) {
+    const labels = {
+      sku: "SKU",
+      productname: "Product Name",
+      category: "Category",
+      price: "Price",
+      totalqty: "Total Qty"
+    };
+    throw new Error(`Missing required CSV column${missing.length === 1 ? "" : "s"}: ${missing.map((header) => labels[header]).join(", ")}.`);
+  }
+
+  const read = (cells, column) => {
+    const index = columns.get(column);
+    return index === undefined ? "" : (cells[index] ?? "").trim();
+  };
+
+  return rows.map((cells, index) => {
+    const rowNumber = index + 2;
+    const sku = read(cells, "sku");
+    const name = read(cells, "productname");
+    const category = read(cells, "category");
+    if (!sku || !name || !category) {
+      throw new Error(`Row ${rowNumber}: SKU, Product Name, and Category cannot be empty.`);
+    }
+    const totalQty = parseCsvQuantity(read(cells, "totalqty"), "Total Qty", rowNumber);
+    const soldQty = parseCsvQuantity(read(cells, "soldqty"), "Sold Qty", rowNumber);
+    if (soldQty > totalQty) {
+      throw new Error(`Row ${rowNumber}: Sold Qty cannot be greater than Total Qty.`);
+    }
+    return {
+      sku,
+      name,
+      category,
+      price: parseCsvPrice(read(cells, "price"), "Price", rowNumber),
+      unitCost: parseCsvPrice(read(cells, "unitcost"), "Unit Cost", rowNumber, true),
+      totalQty,
+      soldQty,
+      notes: read(cells, "notes")
+    };
+  });
+}
+
+async function importMarketFromCsv() {
+  const button = $("#import-csv-button");
+  const error = $("#import-form-error");
+  clearError(error);
+  const file = $("#import-csv-file").files?.[0];
+  const name = $("#import-event-name").value.trim();
+  const startDate = $("#import-event-start-date").value;
+  const endDate = $("#import-event-end-date").value;
+
+  if (!file) {
+    showError(error, "Choose the CSV file to import.");
+    return;
+  }
+  if (!name || !startDate || !endDate) {
+    showError(error, "Enter the event name, start date, and end date.");
+    return;
+  }
+  if (endDate < startDate) {
+    showError(error, "The end date must be the same as or later than the start date.");
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    showError(error, "The CSV file is larger than 5 MB. Export or split a smaller inventory file.");
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = "Importing…";
+  let eventCreated = false;
+  let importedCount = 0;
+  try {
+    const products = inventoryFromCsv(await file.text());
+    const eventRef = doc(collection(db, "events"));
+    const eventData = {
+      name,
+      type: $("#import-event-type").value,
+      startDate,
+      endDate,
+      location: $("#import-event-location").value.trim(),
+      createdAt: serverTimestamp()
+    };
+
+    for (let start = 0; start < products.length || start === 0; start += 450) {
+      const batch = writeBatch(db);
+      if (start === 0) batch.set(eventRef, eventData);
+      products.slice(start, start + 450).forEach((product) => {
+        batch.set(doc(collection(db, "inventory")), {
+          marketId: eventRef.id,
+          ...product,
+          imageBase64: "",
+          updatedAt: serverTimestamp()
+        });
+      });
+      await batch.commit();
+      eventCreated = true;
+      importedCount += products.slice(start, start + 450).length;
+    }
+
+    state.activeEventId = eventRef.id;
+    settingsDialog.close();
+    toast(`Imported ${name} with ${products.length} ${products.length === 1 ? "product" : "products"}.`);
+  } catch (error) {
+    console.error("Could not import market from CSV.", error);
+    const partialImportWarning = eventCreated
+      ? ` The event and ${importedCount} product${importedCount === 1 ? "" : "s"} were already saved; check the event list before retrying.`
+      : "";
+    showError($("#import-form-error"), `${error.message}${partialImportWarning}`);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Import market and products";
+  }
 }
 
 async function compressImage(file) {
@@ -456,7 +723,8 @@ async function createEvent(eventData) {
   const eventWrite = setDoc(eventRef, {
     name: eventData.name.trim(),
     type: eventData.type,
-    date: eventData.date,
+    startDate: eventData.startDate,
+    endDate: eventData.endDate,
     location: eventData.location.trim(),
     createdAt: serverTimestamp()
   });
@@ -501,10 +769,14 @@ async function handleEventSubmit(event) {
   submitButton.disabled = true;
   try {
     const formData = new FormData(eventForm);
+    if (formData.get("endDate") < formData.get("startDate")) {
+      throw new Error("The end date must be the same as or later than the start date.");
+    }
     const copiedCount = await createEvent({
       name: formData.get("name"),
       type: formData.get("type"),
-      date: formData.get("date"),
+      startDate: formData.get("startDate"),
+      endDate: formData.get("endDate"),
       location: formData.get("location") ?? "",
       copyCatalog: formData.has("copyCatalog")
     });
@@ -520,6 +792,76 @@ async function handleEventSubmit(event) {
   }
 }
 
+async function handleSettingsSubmit(event) {
+  event.preventDefault();
+  const activeEvent = state.events.find((item) => item.id === state.activeEventId);
+  if (!activeEvent) return;
+
+  const saveButton = $("#save-settings-button");
+  const error = $("#settings-form-error");
+  clearError(error);
+  saveButton.disabled = true;
+  try {
+    const formData = new FormData(settingsForm);
+    const startDate = String(formData.get("startDate"));
+    const endDate = String(formData.get("endDate"));
+    if (endDate < startDate) {
+      throw new Error("The end date must be the same as or later than the start date.");
+    }
+
+    await updateDoc(doc(db, "events", activeEvent.id), {
+      name: String(formData.get("name")).trim(),
+      type: String(formData.get("type")),
+      startDate,
+      endDate,
+      location: String(formData.get("location") ?? "").trim()
+    });
+    settingsDialog.close();
+    toast("Event settings saved.");
+  } catch (error) {
+    console.error("Could not save event settings.", error);
+    showError($("#settings-form-error"), error.message);
+  } finally {
+    saveButton.disabled = false;
+  }
+}
+
+async function deleteActiveEvent() {
+  const activeEvent = state.events.find((item) => item.id === state.activeEventId);
+  if (!activeEvent) return;
+  if (!navigator.onLine) {
+    showError($("#settings-form-error"), "Connect to the internet before deleting an event so all its inventory can be removed safely.");
+    return;
+  }
+
+  const deleteButton = $("#delete-event-button");
+  clearError($("#settings-form-error"));
+  if (!window.confirm(`Permanently delete "${activeEvent.name}" and all of its products and sales? This cannot be undone.`)) return;
+
+  deleteButton.disabled = true;
+  try {
+    const products = await getDocsFromServer(query(
+      collection(db, "inventory"),
+      where("marketId", "==", activeEvent.id)
+    ));
+
+    for (let start = 0; start < products.docs.length; start += 450) {
+      const batch = writeBatch(db);
+      products.docs.slice(start, start + 450).forEach((product) => batch.delete(product.ref));
+      await batch.commit();
+    }
+
+    await deleteDoc(doc(db, "events", activeEvent.id));
+    settingsDialog.close();
+    toast(`Deleted event and ${products.size} ${products.size === 1 ? "product" : "products"}.`);
+  } catch (error) {
+    console.error("Could not delete event and inventory.", error);
+    showError($("#settings-form-error"), `Could not complete event deletion: ${error.message}`);
+  } finally {
+    deleteButton.disabled = false;
+  }
+}
+
 async function handleInventorySubmit(event) {
   event.preventDefault();
   const submitButton = $("#save-inventory-button");
@@ -529,7 +871,10 @@ async function handleInventorySubmit(event) {
   try {
     const formData = new FormData(inventoryForm);
     const totalQty = Math.max(0, Math.floor(numberValue(formData.get("totalQty"))));
-    const soldQty = Math.min(totalQty, Math.max(0, Math.floor(numberValue(formData.get("soldQty")))));
+    const soldQty = Math.max(0, Math.floor(numberValue(formData.get("soldQty"))));
+    if (soldQty > totalQty) {
+      throw new Error("Sold quantity cannot exceed total stock. Increase stock or adjust the sold count first.");
+    }
     const price = Math.max(0, numberValue(formData.get("price")));
     const product = {
       marketId: state.activeEventId,
@@ -593,6 +938,29 @@ async function changeSoldCount(id, delta) {
   }
 }
 
+async function changeTotalCount(id, delta) {
+  const item = state.inventory.find((product) => product.id === id);
+  if (!item) return;
+  const nextTotal = numberValue(item.totalQty) + delta;
+  if (nextTotal < numberValue(item.soldQty)) return;
+  try {
+    const write = updateDoc(doc(db, "inventory", id), {
+      totalQty: nextTotal,
+      updatedAt: serverTimestamp()
+    });
+    toast(navigator.onLine
+      ? (delta > 0 ? "Stock increased by one." : "Stock reduced by one.")
+      : (delta > 0 ? "Stock increased locally; it will sync online." : "Stock reduced locally; it will sync online."));
+    void write.catch((error) => {
+      console.error("Could not update stock quantity.", error);
+      toast(`Could not update stock quantity: ${error.message}`, true);
+    });
+  } catch (error) {
+    console.error("Could not update stock quantity.", error);
+    toast(`Could not update stock quantity: ${error.message}`, true);
+  }
+}
+
 async function deleteProduct(id) {
   const item = state.inventory.find((product) => product.id === id);
   if (!item || !window.confirm(`Delete "${item.name}" from this event? This cannot be undone.`)) return;
@@ -653,6 +1021,8 @@ function onInventoryAction(event) {
   const { action, id } = button.dataset;
   if (action === "sold-minus") void changeSoldCount(id, -1);
   if (action === "sold-plus") void changeSoldCount(id, 1);
+  if (action === "total-minus") void changeTotalCount(id, -1);
+  if (action === "total-plus") void changeTotalCount(id, 1);
   if (action === "edit") openInventoryDialog(state.inventory.find((item) => item.id === id));
   if (action === "delete") void deleteProduct(id);
 }
@@ -685,10 +1055,25 @@ function initializeAppUi() {
       toast(`Could not log out: ${error.message}`, true);
     }
   });
+  $("#settings-logout-button").addEventListener("click", async () => {
+    try {
+      await signOut(auth);
+      settingsDialog.close();
+    } catch (error) {
+      console.error("Sign-out failed.", error);
+      toast(`Could not log out: ${error.message}`, true);
+    }
+  });
+  $("#settings-button").addEventListener("click", openSettingsDialog);
+  $("#delete-event-button").addEventListener("click", () => void deleteActiveEvent());
+  $("#import-csv-button").addEventListener("click", () => void importMarketFromCsv());
 
   $("#event-select").addEventListener("change", (event) => {
     state.activeEventId = event.target.value;
     state.selectedCategory = "All";
+    $("#add-inventory-button").disabled = !state.activeEventId;
+    $("#mobile-add-button").disabled = !state.activeEventId;
+    $("#settings-button").disabled = !state.activeEventId;
     renderActiveEvent();
     subscribeToInventory();
   });
@@ -725,6 +1110,7 @@ function initializeAppUi() {
   $("#mobile-inventory").addEventListener("click", onInventoryAction);
   $("#inventory-table-body").addEventListener("click", onInventoryAction);
   eventForm.addEventListener("submit", handleEventSubmit);
+  settingsForm.addEventListener("submit", handleSettingsSubmit);
   inventoryForm.addEventListener("submit", handleInventorySubmit);
   inventoryForm.addEventListener("input", (event) => {
     if (["price", "totalQty", "soldQty"].includes(event.target.name)) updateLivePreview();
@@ -750,7 +1136,7 @@ function initializeAppUi() {
   document.querySelectorAll("[data-close-dialog]").forEach((button) => {
     button.addEventListener("click", () => document.getElementById(button.dataset.closeDialog).close());
   });
-  [eventDialog, inventoryDialog].forEach((dialog) => {
+  [eventDialog, inventoryDialog, settingsDialog].forEach((dialog) => {
     dialog.addEventListener("click", (event) => {
       if (event.target === dialog) dialog.close();
     });

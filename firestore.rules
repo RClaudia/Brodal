@@ -10,11 +10,13 @@ service cloud.firestore {
       allow read: if isOwner();
       allow create: if isOwner()
         && request.resource.data.keys().hasOnly([
-          "name", "type", "date", "location", "createdAt"
+          "name", "type", "startDate", "endDate", "location", "createdAt"
         ])
         && request.resource.data.name is string
         && request.resource.data.type in ["Market", "Shop Update"]
-        && request.resource.data.date is string
+        && request.resource.data.startDate is string
+        && request.resource.data.endDate is string
+        && request.resource.data.endDate >= request.resource.data.startDate
         && request.resource.data.location is string
         && request.resource.data.createdAt == request.time;
       allow update, delete: if isOwner();

@@ -11,7 +11,7 @@ A static, mobile-first PWA for tracking handmade product stock and sales across 
 5. Create a **Cloud Firestore** database.
 6. In **Authentication → Users**, copy your account's UID. In [`firestore.rules`](./firestore.rules), replace `REPLACE_WITH_YOUR_FIREBASE_AUTH_UID` with that UID, then publish the rules in **Firestore Database → Rules**. The rules intentionally allow only that one UID and enforce the documented event and inventory fields. Do not publish permissive test-mode rules.
 
-The app's collections are `events` and `inventory`; inventory documents link to an event with `marketId`. Summary values (available quantity, potential value, revenue, and net profit) are calculated in the app and are not stored. Catalog copies reset both quantities to zero.
+The app's collections are `events` and `inventory`; inventory documents link to an event with `marketId`. Events store `startDate` and `endDate` in `YYYY-MM-DD` format (older single-date events are still displayed). Use **Settings** to rename or update the selected event, permanently delete it and all linked inventory (deletion requires an internet connection and confirmation), or import a market from an app-exported CSV. CSV import asks for the new event details; required product columns are SKU, Product Name, Category, Price, and Total Qty. Sold Qty, Unit Cost, and Notes are optional. Product images are not included in the CSV export/import. Product categories are Magnet, Brosa, and Globulet. Prices and summaries are displayed in RON. Available quantity, potential value, revenue, and net profit are calculated in the app and are not stored. Catalog copies reset both quantities to zero.
 
 The rules template is for a single-owner inventory. If you later let multiple accounts use the same project, add an owner UID field to documents and scope both the Firestore rules and client queries to that owner before granting access to those accounts.
 
@@ -21,7 +21,7 @@ The rules template is for a single-owner inventory. If you later let multiple ac
 2. Commit and push the static files:
 
    ```text
-   git add index.html styles.css app.js firebase-config.js manifest.json app-icon.svg sw.js firestore.rules README.md images/logo.png
+   git add index.html styles.css app.js firebase-config.js manifest.json sw.js firestore.rules README.md images/logo.png
    git commit -m "Add handmade inventory PWA"
    git push origin main
    ```
@@ -35,4 +35,4 @@ The rules template is for a single-owner inventory. If you later let multiple ac
 - **iPhone/iPad:** open the HTTPS URL in Safari, tap **Share**, then **Add to Home Screen**.
 - Load the app and sign in while online at least once. Firestore local persistence and the service worker cache support viewing and queuing changes during intermittent connectivity. Browser storage must remain available; avoid clearing site data. Pending Firebase writes synchronize when the connection returns.
 
-The app uses the supplied `images/logo.png` as its in-app logo and `app-icon.svg` as the install icon. Firebase API keys identify the project and are expected in a browser app; Firestore rules and Authentication are what protect its data.
+The supplied `images/logo.png` is used as the login, header, and install icon. Firebase API keys identify the project and are expected in a browser app; Firestore rules and Authentication are what protect its data.
