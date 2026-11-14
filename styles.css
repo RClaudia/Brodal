@@ -31,7 +31,7 @@ body {
   color: var(--ink);
 }
 
-#login-title {
+.login-title {
   text-align: center;
 }
 
