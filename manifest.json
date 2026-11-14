@@ -1,0 +1,20 @@
+{
+  "id": "./",
+  "name": "Brodal Handmade Inventory",
+  "short_name": "Brodal Stock",
+  "description": "Track handmade products, market stock, and sales.",
+  "lang": "en",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ebf8fe",
+  "theme_color": "#ebf8fe",
+  "icons": [
+    {
+      "src": "./app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
