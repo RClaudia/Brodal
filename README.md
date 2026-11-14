@@ -9,9 +9,11 @@ A static, mobile-first PWA for tracking handmade product stock and sales across 
 3. In **Authentication → Sign-in method**, enable **Email/Password**. In **Authentication → Users**, add the email/password account you will use.
 4. In **Authentication → Settings → Authorized domains**, add your Pages hostname, for example `yourusername.github.io` (hostname only; do not include `https://` or the repository path).
 5. Create a **Cloud Firestore** database.
-6. In **Authentication → Users**, copy your account's UID. In [`firestore.rules`](./firestore.rules), replace `REPLACE_WITH_YOUR_FIREBASE_AUTH_UID` with that UID, then publish the rules in **Firestore Database → Rules**. The rules intentionally allow only that one UID and enforce the documented event, inventory, reusable item, and category fields. Do not publish permissive test-mode rules.
+6. In **Authentication → Users**, copy your account's UID. In [`firestore.rules`](./firestore.rules), replace `REPLACE_WITH_YOUR_FIREBASE_AUTH_UID` with that UID, then publish the rules in **Firestore Database → Rules**. The rules intentionally allow only that one UID and enforce the documented event, inventory, reusable item, category, and accounting-entry fields. Do not publish permissive test-mode rules.
 
-The app stores `events`, `inventory`, reusable `products`, and `categories` in Firestore. Inventory documents link to an event with `marketId` and a reusable item with `productId`; product details and prices are copied into each market inventory record so catalog price changes never rewrite market history. On first load, existing inventory is used to seed the reusable item catalog by SKU. Events store `startDate` and `endDate` in `YYYY-MM-DD` format (older single-date events are still displayed).
+After signing in, use the Workspace Hub to open **Inventory** or **Contabilitate**. **Inventory → Markets** is the current inventory section; additional inventory sections can be added later. The accounting ledger is stored in the separate `accounting_entries` collection; it does not share documents with `events`, `inventory`, or `products`. Each row includes `nrCrt`, `dataOperatiunii`, `document`, `explicatii`, the four income/payment amounts in RON, and Firestore `createdAt`/`updatedAt` timestamps. Number suggestions are based on the visible year/month selection and can be edited; the number is not a database-enforced counter.
+
+The app also stores `events`, `inventory`, reusable `products`, and `categories` in Firestore. Inventory documents link to an event with `marketId` and a reusable item with `productId`; product details and prices are copied into each market inventory record so catalog price changes never rewrite market history. On first load, existing inventory is used to seed the reusable item catalog by SKU. Events store `startDate` and `endDate` in `YYYY-MM-DD` format (older single-date events are still displayed).
 
 Use the **Settings** page to rename/update or delete the selected event, add events, manage categories, or import a market. Event deletion removes its linked inventory and requires an internet connection and confirmation. Category renames update reusable catalog items but leave past market records unchanged; removing a category is disabled while a catalog item uses it. The separate **Items** page manages reusable products, including prices for future markets. Adding an item to a market copies the current catalog details and price into that market's history.
 
@@ -26,12 +28,12 @@ The rules template is for a single-owner inventory. If you later let multiple ac
 
    ```text
    git add index.html styles.css app.js firebase-config.js manifest.json sw.js firestore.rules README.md images/logo.png
-   git commit -m "Add handmade inventory PWA"
+   git commit -m "Add accounting workspace"
    git push origin main
    ```
 
 3. On GitHub, open **Settings → Pages**, choose the `main` branch and `/ (root)` (or the folder where these files live), and save.
-4. Open the published HTTPS URL, such as `https://yourusername.github.io/repo-name/`. Sign in and create a market to verify Authentication and Firestore access. The service worker, manifest, and asset paths are relative so the repository subfolder is supported.
+4. Before publishing the app, replace the owner UID placeholder in `firestore.rules` with the signed-in Firebase user's UID and publish those rules from **Firestore Database → Rules**. Confirm that the deployed rules include `accounting_entries` read/create/update/delete access for that owner. Then open the published HTTPS URL, such as `https://yourusername.github.io/repo-name/`, and sign in to verify Authentication, inventory, and accounting access. GitHub Pages only hosts the static app; Firestore rules must be published separately in Firebase. The service worker, manifest, and asset paths are relative so the repository subfolder is supported.
 
 ## Install on your phone and use offline
 

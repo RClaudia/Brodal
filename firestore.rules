@@ -91,5 +91,54 @@ service cloud.firestore {
         && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if isOwner();
     }
+
+    match /accounting_entries/{entryId} {
+      allow read: if isOwner();
+      allow create: if isOwner()
+        && request.resource.data.keys().hasOnly([
+          "nrCrt", "dataOperatiunii", "document", "explicatii",
+          "incasariNumerar", "incasariBanca", "platiNumerar", "platiBanca",
+          "createdAt", "updatedAt"
+        ])
+        && request.resource.data.nrCrt is int
+        && request.resource.data.nrCrt > 0
+        && request.resource.data.dataOperatiunii is string
+        && request.resource.data.dataOperatiunii.matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+        && request.resource.data.document is string
+        && request.resource.data.explicatii is string
+        && request.resource.data.incasariNumerar is number
+        && request.resource.data.incasariNumerar >= 0
+        && request.resource.data.incasariBanca is number
+        && request.resource.data.incasariBanca >= 0
+        && request.resource.data.platiNumerar is number
+        && request.resource.data.platiNumerar >= 0
+        && request.resource.data.platiBanca is number
+        && request.resource.data.platiBanca >= 0
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isOwner()
+        && request.resource.data.keys().hasOnly([
+          "nrCrt", "dataOperatiunii", "document", "explicatii",
+          "incasariNumerar", "incasariBanca", "platiNumerar", "platiBanca",
+          "createdAt", "updatedAt"
+        ])
+        && request.resource.data.nrCrt is int
+        && request.resource.data.nrCrt > 0
+        && request.resource.data.dataOperatiunii is string
+        && request.resource.data.dataOperatiunii.matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+        && request.resource.data.document is string
+        && request.resource.data.explicatii is string
+        && request.resource.data.incasariNumerar is number
+        && request.resource.data.incasariNumerar >= 0
+        && request.resource.data.incasariBanca is number
+        && request.resource.data.incasariBanca >= 0
+        && request.resource.data.platiNumerar is number
+        && request.resource.data.platiNumerar >= 0
+        && request.resource.data.platiBanca is number
+        && request.resource.data.platiBanca >= 0
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if isOwner();
+    }
   }
 }

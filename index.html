@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="ro">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -52,14 +52,168 @@
         <div class="topbar-actions">
           <span id="connection-status" class="connection-status" role="status">Connecting…</span>
           <span id="user-email" class="user-email"></span>
-          <button id="dashboard-page-button" class="button button-quiet" type="button">Markets</button>
-          <button id="items-page-button" class="button button-quiet" type="button">Items</button>
-          <button id="settings-button" class="button button-quiet settings-button" type="button" aria-label="Settings">
-            <span aria-hidden="true">⚙</span><span class="settings-label">Settings</span>
-          </button>
+          <button id="workspace-button" class="button button-quiet" type="button">Home</button>
+          <span id="inventory-navigation" class="inventory-navigation" hidden>
+            <button id="inventory-module-button" class="button button-quiet" type="button">Inventory</button>
+            <span id="inventory-nav" class="inventory-nav">
+              <button id="dashboard-page-button" class="button button-quiet" type="button">Markets</button>
+              <button id="items-page-button" class="button button-quiet" type="button">Items</button>
+              <button id="settings-button" class="button button-quiet settings-button" type="button" aria-label="Settings">
+                <span aria-hidden="true">⚙</span><span class="settings-label">Settings</span>
+              </button>
+            </span>
+          </span>
+          <button id="accounting-module-button" class="button button-quiet" type="button">Contabilitate</button>
           <button id="logout-button" class="button button-quiet" type="button">Log out</button>
         </div>
       </header>
+
+      <main id="workspace-page" class="dashboard page-view" hidden>
+        <section class="workspace-welcome">
+          <p class="eyebrow">WELCOME TO BRODAL</p>
+          <h1>Choose what you want to manage</h1>
+        </section>
+        <section class="workspace-grid" aria-label="Workspace modules">
+          <button class="workspace-card" type="button" data-module="inventory">
+            <span class="workspace-icon" aria-hidden="true">✿</span>
+            <span class="workspace-card-copy">
+              <strong>Inventory</strong>
+              <small>Manage your markets, items, and other inventory.</small>
+            </span>
+            <span class="workspace-arrow" aria-hidden="true">›</span>
+          </button>
+          <button class="workspace-card workspace-card-accounting" type="button" data-module="accounting">
+            <span class="workspace-icon" aria-hidden="true">▤</span>
+            <span class="workspace-card-copy">
+              <strong>Contabilitate</strong>
+              <small>Registru de Încasări și Plăți — income, expenses, and balances.</small>
+            </span>
+            <span class="workspace-arrow" aria-hidden="true">›</span>
+          </button>
+          <div class="workspace-card workspace-card-placeholder" aria-disabled="true">
+            <span class="workspace-icon" aria-hidden="true">＋</span>
+            <span class="workspace-card-copy">
+              <strong>More workspaces coming</strong>
+              <small>This space is ready for future Brodal modules.</small>
+            </span>
+          </div>
+        </section>
+      </main>
+
+      <main id="inventory-home-page" class="dashboard page-view" hidden>
+        <section class="workspace-welcome">
+          <p class="eyebrow">INVENTORY</p>
+          <h1>Choose an inventory</h1>
+          <p class="muted">Manage market stock now, with room for materials and other inventory later.</p>
+        </section>
+        <section class="workspace-grid" aria-label="Inventory sections">
+          <button class="workspace-card" type="button" data-inventory-page="markets">
+            <span class="workspace-icon" aria-hidden="true">✿</span>
+            <span class="workspace-card-copy">
+              <strong>Markets</strong>
+              <small>Track products, stock, and sales for each market.</small>
+            </span>
+            <span class="workspace-arrow" aria-hidden="true">›</span>
+          </button>
+          <div class="workspace-card workspace-card-placeholder" aria-disabled="true">
+            <span class="workspace-icon" aria-hidden="true">＋</span>
+            <span class="workspace-card-copy">
+              <strong>Materials and other inventory</strong>
+              <small>Additional inventory sections can be added here later.</small>
+            </span>
+          </div>
+        </section>
+      </main>
+
+      <main id="accounting-page" class="dashboard page-view" hidden>
+        <div class="page-heading accounting-heading">
+          <div>
+            <p class="eyebrow">CONTABILITATE</p>
+            <h1>Registru de Încasări și Plăți</h1>
+            <p class="muted">Urmărește încasările, plățile și soldurile în RON.</p>
+          </div>
+          <button id="accounting-add-button" class="button button-primary accounting-desktop-add" type="button">＋ Adaugă Operațiune</button>
+        </div>
+        <section class="accounting-summary" aria-label="Sumar contabil">
+          <article class="summary-card accounting-income">
+            <span class="summary-label">Total Încasări</span>
+            <strong id="accounting-total-income">0 RON</strong>
+            <span id="accounting-income-breakdown" class="summary-caption">Numerar 0 RON · Bancă 0 RON</span>
+          </article>
+          <article class="summary-card accounting-expense">
+            <span class="summary-label">Total Plăți</span>
+            <strong id="accounting-total-expenses">0 RON</strong>
+            <span id="accounting-expense-breakdown" class="summary-caption">Numerar 0 RON · Bancă 0 RON</span>
+          </article>
+          <article class="summary-card">
+            <span class="summary-label">Sold Numerar</span>
+            <strong id="accounting-cash-balance">0 RON</strong>
+            <span class="summary-caption">Încasări numerar − plăți numerar</span>
+          </article>
+          <article class="summary-card">
+            <span class="summary-label">Sold Bancă</span>
+            <strong id="accounting-bank-balance">0 RON</strong>
+            <span class="summary-caption">Încasări bancă − plăți bancă</span>
+          </article>
+        </section>
+        <section class="inventory-section accounting-section">
+          <div class="accounting-filters">
+            <label>
+              An
+              <select id="accounting-year-filter" aria-label="Filtrează după an"></select>
+            </label>
+            <label>
+              Lună
+              <select id="accounting-month-filter" aria-label="Filtrează după lună">
+                <option value="all">Toate lunile</option>
+                <option value="01">Ianuarie</option><option value="02">Februarie</option>
+                <option value="03">Martie</option><option value="04">Aprilie</option>
+                <option value="05">Mai</option><option value="06">Iunie</option>
+                <option value="07">Iulie</option><option value="08">August</option>
+                <option value="09">Septembrie</option><option value="10">Octombrie</option>
+                <option value="11">Noiembrie</option><option value="12">Decembrie</option>
+              </select>
+            </label>
+            <label class="accounting-search">
+              Caută document sau explicații
+              <input id="accounting-search" type="search" placeholder="Caută în registru…">
+            </label>
+            <button id="accounting-export-button" class="button button-outline" type="button">Export CSV</button>
+          </div>
+          <div id="accounting-loading" class="inline-loading" hidden><span class="spinner" aria-hidden="true"></span> Se încarcă registrul…</div>
+          <div id="accounting-empty" class="empty-state" hidden>
+            <span class="empty-art" aria-hidden="true">▤</span>
+            <h3 id="accounting-empty-title">Nicio operațiune în acest filtru</h3>
+            <p class="muted">Adaugă prima operațiune pentru a începe registrul.</p>
+            <button class="button button-primary" data-accounting-add type="button">＋ Adaugă Operațiune</button>
+          </div>
+          <div class="accounting-mobile-list" id="accounting-mobile-list" aria-live="polite"></div>
+          <div class="accounting-table-wrap">
+            <table class="accounting-table">
+              <thead>
+                <tr>
+                  <th rowspan="2" scope="col">Nr. crt.</th>
+                  <th rowspan="2" scope="col">Data Operațiunii</th>
+                  <th rowspan="2" scope="col">Document</th>
+                  <th rowspan="2" scope="col">Explicații</th>
+                  <th colspan="2" scope="colgroup">Încasări</th>
+                  <th colspan="2" scope="colgroup">Plăți</th>
+                  <th rowspan="2" scope="col">Acțiuni</th>
+                </tr>
+                <tr>
+                  <th scope="col">Numerar</th>
+                  <th scope="col">Bancă</th>
+                  <th scope="col">Plăți Numerar</th>
+                  <th scope="col">Plăți Bancă</th>
+                </tr>
+              </thead>
+              <tbody id="accounting-table-body"></tbody>
+              <tfoot id="accounting-table-foot"></tfoot>
+            </table>
+          </div>
+        </section>
+        <button id="accounting-mobile-add" class="button button-primary accounting-mobile-add" type="button">＋ Adaugă Operațiune</button>
+      </main>
 
       <main id="dashboard-page" class="dashboard">
         <section class="event-toolbar" aria-label="Market selection">
@@ -107,7 +261,7 @@
         <section class="inventory-section">
           <div class="inventory-heading">
             <div>
-              <h2>Inventory</h2>
+              <h2>Market inventory</h2>
               <p id="inventory-count" class="muted">Choose an event to see its products.</p>
             </div>
             <button id="add-inventory-button" class="button button-primary desktop-add" type="button">＋ Add Product</button>
@@ -234,6 +388,46 @@
         <button id="mobile-add-button" class="button button-primary button-wide" type="button">＋ Add Product</button>
       </div>
     </div>
+
+    <dialog id="accounting-dialog" class="app-dialog">
+      <form id="accounting-form" class="dialog-content accounting-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">REGISTRU CONTABIL</p>
+            <h2 id="accounting-form-title">Adaugă Operațiune</h2>
+          </div>
+          <button class="icon-button" data-close-dialog="accounting-dialog" type="button" aria-label="Închide">×</button>
+        </div>
+        <div class="form-row">
+          <label>Nr. crt.<input name="nrCrt" type="number" min="1" step="1" inputmode="numeric" required></label>
+          <label>Data Operațiunii<input name="dataOperatiunii" type="date" required></label>
+        </div>
+        <label>
+          Document
+          <input name="document" type="text" maxlength="120" placeholder="e.g. Invoice 123 or receipt code" required>
+        </label>
+        <label>Explicații<textarea name="explicatii" rows="3" maxlength="1000" required></textarea></label>
+        <fieldset class="accounting-money-group income-group">
+          <legend>Încasări (RON)</legend>
+          <div class="form-row">
+            <label>Numerar<input name="incasariNumerar" type="number" min="0" step="0.01" inputmode="decimal" value="0" required></label>
+            <label>Bancă<input name="incasariBanca" type="number" min="0" step="0.01" inputmode="decimal" value="0" required></label>
+          </div>
+        </fieldset>
+        <fieldset class="accounting-money-group expense-group">
+          <legend>Plăți (RON)</legend>
+          <div class="form-row">
+            <label>Plăți Numerar<input name="platiNumerar" type="number" min="0" step="0.01" inputmode="decimal" value="0" required></label>
+            <label>Plăți Bancă<input name="platiBanca" type="number" min="0" step="0.01" inputmode="decimal" value="0" required></label>
+          </div>
+        </fieldset>
+        <p id="accounting-form-error" class="form-error" role="alert" hidden></p>
+        <div class="dialog-actions">
+          <button class="button button-quiet" data-close-dialog="accounting-dialog" type="button">Anulează</button>
+          <button id="accounting-save-button" class="button button-primary" type="submit">Salvează Operațiunea</button>
+        </div>
+      </form>
+    </dialog>
 
     <dialog id="event-dialog" class="app-dialog">
       <form id="event-form" class="dialog-content">

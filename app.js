@@ -50,9 +50,18 @@ const state = {
   selectedCatalogProductId: "",
   editingCategoryId: null,
   currentPage: "dashboard",
+  currentModule: "hub",
   catalogMigrationStarted: false,
   toastTimer: null,
-  inventoryLoading: false
+  inventoryLoading: false,
+  accountingEntries: [],
+  accountingUnsubscribe: null,
+  accountingLoading: false,
+  accountingYear: String(new Date().getFullYear()),
+  accountingMonth: "all",
+  accountingSearch: "",
+  editingAccountingId: null,
+  accountingNumberEdited: false
 };
 
 const loginScreen = $("#login-screen");
@@ -66,9 +75,11 @@ const categoryDialog = $("#category-dialog");
 const settingsDialog = $("#settings-dialog");
 const importDialog = $("#import-dialog");
 const accountDialog = $("#account-dialog");
+const accountingDialog = $("#accounting-dialog");
 const inventoryForm = $("#inventory-form");
 const eventForm = $("#event-form");
 const settingsForm = $("#settings-form");
+const accountingForm = $("#accounting-form");
 
 function showError(element, message) {
   element.textContent = message;
@@ -408,13 +419,271 @@ function renderCategoryList() {
 
 function showPage(name) {
   state.currentPage = name;
+  state.currentModule = name === "hub" ? "hub" : name === "accounting" ? "accounting" : "inventory";
+  $("#workspace-page").hidden = name !== "hub";
+  $("#inventory-home-page").hidden = name !== "inventory-home";
+  $("#accounting-page").hidden = name !== "accounting";
   $("#dashboard-page").hidden = name !== "dashboard";
   $("#items-page").hidden = name !== "items";
   $("#settings-page").hidden = name !== "settings";
   $(".mobile-action-bar").hidden = name !== "dashboard";
+  $("#inventory-navigation").hidden = state.currentModule !== "inventory";
+  $("#inventory-module-button").setAttribute("aria-current", name === "inventory-home" ? "page" : "false");
+  $("#dashboard-page-button").setAttribute("aria-current", name === "dashboard" ? "page" : "false");
   $("#items-page-button").setAttribute("aria-current", name === "items" ? "page" : "false");
   $("#settings-button").setAttribute("aria-current", name === "settings" ? "page" : "false");
+  $("#workspace-button").setAttribute("aria-current", name === "hub" ? "page" : "false");
+  $("#accounting-module-button").setAttribute("aria-current", state.currentModule === "accounting" ? "page" : "false");
   if (name === "items") renderCatalog();
+  if (name === "accounting") renderAccounting();
+}
+
+function localDateString(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function accountingDateLabel(value) {
+  const [year, month, day] = String(value ?? "").split("-");
+  return year && month && day ? `${day}.${month}.${year}` : "";
+}
+
+function getFilteredAccountingEntries() {
+  const search = state.accountingSearch.trim().toLocaleLowerCase();
+  return state.accountingEntries
+    .filter((entry) => state.accountingYear === "all" || String(entry.dataOperatiunii ?? "").slice(0, 4) === state.accountingYear)
+    .filter((entry) => state.accountingMonth === "all" || String(entry.dataOperatiunii ?? "").slice(5, 7) === state.accountingMonth)
+    .filter((entry) => !search
+      || String(entry.document ?? "").toLocaleLowerCase().includes(search)
+      || String(entry.explicatii ?? "").toLocaleLowerCase().includes(search))
+    .sort((a, b) => String(a.dataOperatiunii ?? "").localeCompare(String(b.dataOperatiunii ?? ""))
+      || numberValue(a.nrCrt) - numberValue(b.nrCrt));
+}
+
+function renderAccountingYearFilter() {
+  const filter = $("#accounting-year-filter");
+  const years = [...new Set(state.accountingEntries
+    .map((entry) => String(entry.dataOperatiunii ?? "").slice(0, 4))
+    .filter((year) => /^\d{4}$/.test(year)))];
+  const currentYear = String(new Date().getFullYear());
+  if (!years.includes(currentYear)) years.push(currentYear);
+  years.sort((a, b) => b.localeCompare(a));
+  if (state.accountingYear !== "all" && !years.includes(state.accountingYear)) {
+    state.accountingYear = currentYear;
+  }
+  filter.innerHTML = `<option value="all">Toți anii</option>${years.map((year) => `<option value="${year}">${year}</option>`).join("")}`;
+  filter.value = state.accountingYear;
+}
+
+function accountingTotals(entries) {
+  return entries.reduce((totals, entry) => {
+    totals.cashIncome += numberValue(entry.incasariNumerar);
+    totals.bankIncome += numberValue(entry.incasariBanca);
+    totals.cashExpenses += numberValue(entry.platiNumerar);
+    totals.bankExpenses += numberValue(entry.platiBanca);
+    return totals;
+  }, { cashIncome: 0, bankIncome: 0, cashExpenses: 0, bankExpenses: 0 });
+}
+
+function accountingAmount(value) {
+  return money.format(numberValue(value));
+}
+
+function renderAccounting() {
+  renderAccountingYearFilter();
+  $("#accounting-month-filter").value = state.accountingMonth;
+  const entries = getFilteredAccountingEntries();
+  const totals = accountingTotals(entries);
+  $("#accounting-total-income").textContent = accountingAmount(totals.cashIncome + totals.bankIncome);
+  $("#accounting-income-breakdown").textContent = `Numerar ${accountingAmount(totals.cashIncome)} · Bancă ${accountingAmount(totals.bankIncome)}`;
+  $("#accounting-total-expenses").textContent = accountingAmount(totals.cashExpenses + totals.bankExpenses);
+  $("#accounting-expense-breakdown").textContent = `Numerar ${accountingAmount(totals.cashExpenses)} · Bancă ${accountingAmount(totals.bankExpenses)}`;
+  $("#accounting-cash-balance").textContent = accountingAmount(totals.cashIncome - totals.cashExpenses);
+  $("#accounting-bank-balance").textContent = accountingAmount(totals.bankIncome - totals.bankExpenses);
+  $("#accounting-loading").hidden = !state.accountingLoading;
+  $("#accounting-empty").hidden = state.accountingLoading || entries.length > 0;
+  $(".accounting-table-wrap").hidden = state.accountingLoading || entries.length === 0;
+  $("#accounting-mobile-list").innerHTML = entries.map((entry) => `
+    <article class="accounting-mobile-card">
+      <div class="accounting-mobile-card-top">
+        <span class="accounting-number-badge">Nr. ${escapeHtml(entry.nrCrt)}</span>
+        <time class="accounting-mobile-date" datetime="${escapeHtml(entry.dataOperatiunii)}">${escapeHtml(accountingDateLabel(entry.dataOperatiunii))}</time>
+      </div>
+      <p class="accounting-mobile-document">${escapeHtml(entry.document)}</p>
+      <p class="accounting-mobile-description">${escapeHtml(entry.explicatii)}</p>
+      <div class="accounting-mobile-amounts">
+        <div class="accounting-mobile-amount-group accounting-mobile-income"><strong>Încasări</strong><span>Numerar: ${accountingAmount(entry.incasariNumerar)}</span><span>Bancă: ${accountingAmount(entry.incasariBanca)}</span></div>
+        <div class="accounting-mobile-amount-group accounting-mobile-expense"><strong>Plăți</strong><span>Numerar: ${accountingAmount(entry.platiNumerar)}</span><span>Bancă: ${accountingAmount(entry.platiBanca)}</span></div>
+      </div>
+      <div class="accounting-mobile-card-actions">
+        <button class="text-button" type="button" data-accounting-action="edit" data-id="${escapeHtml(entry.id)}">Editează</button>
+        <button class="text-button danger" type="button" data-accounting-action="delete" data-id="${escapeHtml(entry.id)}">Șterge</button>
+      </div>
+    </article>
+  `).join("");
+  $("#accounting-table-body").innerHTML = entries.map((entry) => `
+    <tr>
+      <td>${escapeHtml(entry.nrCrt)}</td>
+      <td>${escapeHtml(accountingDateLabel(entry.dataOperatiunii))}</td>
+      <td>${escapeHtml(entry.document)}</td>
+      <td>${escapeHtml(entry.explicatii)}</td>
+      <td>${accountingAmount(entry.incasariNumerar)}</td>
+      <td>${accountingAmount(entry.incasariBanca)}</td>
+      <td>${accountingAmount(entry.platiNumerar)}</td>
+      <td>${accountingAmount(entry.platiBanca)}</td>
+      <td><span class="accounting-row-actions">
+        <button class="text-button" type="button" data-accounting-action="edit" data-id="${escapeHtml(entry.id)}">Editează</button>
+        <button class="text-button danger" type="button" data-accounting-action="delete" data-id="${escapeHtml(entry.id)}">Șterge</button>
+      </span></td>
+    </tr>
+  `).join("");
+  $("#accounting-table-foot").innerHTML = entries.length ? `
+    <tr>
+      <td colspan="4">Total</td>
+      <td>${accountingAmount(totals.cashIncome)}</td>
+      <td>${accountingAmount(totals.bankIncome)}</td>
+      <td>${accountingAmount(totals.cashExpenses)}</td>
+      <td>${accountingAmount(totals.bankExpenses)}</td>
+      <td></td>
+    </tr>
+  ` : "";
+}
+
+function subscribeToAccountingEntries() {
+  state.accountingUnsubscribe?.();
+  state.accountingLoading = true;
+  renderAccounting();
+  state.accountingUnsubscribe = onSnapshot(collection(db, "accounting_entries"), (snapshot) => {
+    state.accountingEntries = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+    state.accountingLoading = false;
+    renderAccounting();
+  }, (error) => {
+    state.accountingLoading = false;
+    renderAccounting();
+    console.error("Could not load accounting entries.", error);
+    toast(`Could not load accounting entries: ${error.message}`, true);
+  });
+}
+
+function nextAccountingEntryNumber(operationDate) {
+  const year = state.accountingYear === "all" ? String(operationDate).slice(0, 4) : state.accountingYear;
+  const entries = state.accountingEntries.filter((entry) =>
+    String(entry.dataOperatiunii ?? "").slice(0, 4) === year
+    && (state.accountingMonth === "all" || String(entry.dataOperatiunii ?? "").slice(5, 7) === state.accountingMonth)
+  );
+  return entries.reduce((maximum, entry) => Math.max(maximum, numberValue(entry.nrCrt)), 0) + 1;
+}
+
+function openAccountingDialog(entry = null) {
+  state.editingAccountingId = entry?.id ?? null;
+  state.accountingNumberEdited = false;
+  accountingForm.reset();
+  clearError($("#accounting-form-error"));
+  $("#accounting-form-title").textContent = entry ? "Editează Operațiune" : "Adaugă Operațiune";
+  $("#accounting-save-button").textContent = entry ? "Salvează Modificările" : "Salvează Operațiunea";
+  accountingForm.elements.nrCrt.value = entry?.nrCrt ?? nextAccountingEntryNumber(localDateString());
+  accountingForm.elements.dataOperatiunii.value = entry?.dataOperatiunii ?? localDateString();
+  accountingForm.elements.document.value = entry?.document ?? "";
+  accountingForm.elements.explicatii.value = entry?.explicatii ?? "";
+  ["incasariNumerar", "incasariBanca", "platiNumerar", "platiBanca"].forEach((field) => {
+    accountingForm.elements[field].value = entry ? numberValue(entry[field]) : 0;
+  });
+  accountingDialog.showModal();
+}
+
+async function handleAccountingSubmit(event) {
+  event.preventDefault();
+  const submitButton = $("#accounting-save-button");
+  const formError = $("#accounting-form-error");
+  clearError(formError);
+  submitButton.disabled = true;
+  try {
+    const formData = new FormData(accountingForm);
+    const nrCrt = Number(formData.get("nrCrt"));
+    const dataOperatiunii = String(formData.get("dataOperatiunii"));
+    const explicatii = String(formData.get("explicatii")).trim();
+    if (!Number.isInteger(nrCrt) || nrCrt < 1) throw new Error("Nr. crt. trebuie să fie un număr întreg pozitiv.");
+    const [year, month, day] = dataOperatiunii.split("-").map(Number);
+    const parsedDate = new Date(year, month - 1, day);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dataOperatiunii)
+      || parsedDate.getFullYear() !== year
+      || parsedDate.getMonth() !== month - 1
+      || parsedDate.getDate() !== day) {
+      throw new Error("Alege o dată validă pentru operațiune.");
+    }
+    if (!explicatii) throw new Error("Completează câmpul Explicații.");
+    const payload = {
+      nrCrt,
+      dataOperatiunii,
+      document: String(formData.get("document")),
+      explicatii,
+      incasariNumerar: Number(formData.get("incasariNumerar")),
+      incasariBanca: Number(formData.get("incasariBanca")),
+      platiNumerar: Number(formData.get("platiNumerar")),
+      platiBanca: Number(formData.get("platiBanca")),
+      updatedAt: serverTimestamp()
+    };
+    if (Object.values(payload).some((value) => typeof value === "number" && (!Number.isFinite(value) || value < 0))) {
+      throw new Error("Sumele trebuie să fie numere pozitive sau zero.");
+    }
+    if (state.editingAccountingId) {
+      await updateDoc(doc(db, "accounting_entries", state.editingAccountingId), payload);
+    } else {
+      await addDoc(collection(db, "accounting_entries"), { ...payload, createdAt: serverTimestamp() });
+    }
+    accountingDialog.close();
+    toast(state.editingAccountingId ? "Operațiune actualizată." : "Operațiune adăugată.");
+  } catch (error) {
+    console.error("Could not save accounting entry.", error);
+    showError(formError, error.message);
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+async function deleteAccountingEntry(id) {
+  const entry = state.accountingEntries.find((item) => item.id === id);
+  if (!entry || !window.confirm(`Ștergi operațiunea nr. ${entry.nrCrt}? Această acțiune nu poate fi anulată.`)) return;
+  try {
+    await deleteDoc(doc(db, "accounting_entries", id));
+    toast("Operațiune ștearsă.");
+  } catch (error) {
+    console.error("Could not delete accounting entry.", error);
+    toast(`Could not delete accounting entry: ${error.message}`, true);
+  }
+}
+
+function onAccountingAction(event) {
+  const button = event.target.closest("[data-accounting-action]");
+  if (!button) return;
+  const entry = state.accountingEntries.find((item) => item.id === button.dataset.id);
+  if (button.dataset.accountingAction === "edit" && entry) openAccountingDialog(entry);
+  if (button.dataset.accountingAction === "delete") void deleteAccountingEntry(button.dataset.id);
+}
+
+function exportAccountingCsv() {
+  const fields = ["Nr. crt.", "Data Operatiunii", "Document", "Explicatii", "Incasari Numerar", "Incasari Banca", "Plati Numerar", "Plati Banca"];
+  const quote = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+  const rows = getFilteredAccountingEntries().map((entry) => [
+    entry.nrCrt,
+    entry.dataOperatiunii,
+    entry.document,
+    entry.explicatii,
+    numberValue(entry.incasariNumerar).toFixed(2),
+    numberValue(entry.incasariBanca).toFixed(2),
+    numberValue(entry.platiNumerar).toFixed(2),
+    numberValue(entry.platiBanca).toFixed(2)
+  ]);
+  const csv = `\uFEFF${[fields, ...rows].map((row) => row.map(quote).join(",")).join("\r\n")}`;
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `registru-incasari-plati-${state.accountingYear}-${state.accountingMonth}.csv`;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast("Export CSV pregătit.");
 }
 
 function subscribeToInventory() {
@@ -1607,6 +1876,17 @@ function initializeAppUi() {
   $("#delete-event-button").addEventListener("click", () => void deleteActiveEvent());
   $("#import-csv-button").addEventListener("click", () => void importMarketFromCsv());
 
+  $("#workspace-button").addEventListener("click", () => showPage("hub"));
+  $("#inventory-module-button").addEventListener("click", () => showPage("inventory-home"));
+  $("#accounting-module-button").addEventListener("click", () => showPage("accounting"));
+  $("#workspace-page").addEventListener("click", (event) => {
+    const card = event.target.closest("[data-module]");
+    if (card?.dataset.module === "inventory") showPage("inventory-home");
+    if (card?.dataset.module === "accounting") showPage("accounting");
+  });
+  $("#inventory-home-page").addEventListener("click", (event) => {
+    if (event.target.closest('[data-inventory-page="markets"]')) showPage("dashboard");
+  });
   $("#dashboard-page-button").addEventListener("click", () => showPage("dashboard"));
   $("#items-page-button").addEventListener("click", () => showPage("items"));
   $("#settings-button").addEventListener("click", () => {
@@ -1727,6 +2007,35 @@ function initializeAppUi() {
   $("#add-inventory-button").addEventListener("click", () => openInventoryDialog());
   $("#mobile-add-button").addEventListener("click", () => openInventoryDialog());
   $("#export-button").addEventListener("click", exportCsv);
+  $("#accounting-add-button").addEventListener("click", () => openAccountingDialog());
+  $("#accounting-mobile-add").addEventListener("click", () => openAccountingDialog());
+  $("#accounting-empty").addEventListener("click", (event) => {
+    if (event.target.closest("[data-accounting-add]")) openAccountingDialog();
+  });
+  $("#accounting-year-filter").addEventListener("change", (event) => {
+    state.accountingYear = event.target.value;
+    renderAccounting();
+  });
+  $("#accounting-month-filter").addEventListener("change", (event) => {
+    state.accountingMonth = event.target.value;
+    renderAccounting();
+  });
+  $("#accounting-search").addEventListener("input", (event) => {
+    state.accountingSearch = event.target.value;
+    renderAccounting();
+  });
+  $("#accounting-export-button").addEventListener("click", exportAccountingCsv);
+  $("#accounting-mobile-list").addEventListener("click", onAccountingAction);
+  $("#accounting-table-body").addEventListener("click", onAccountingAction);
+  accountingForm.addEventListener("submit", handleAccountingSubmit);
+  accountingForm.elements.nrCrt.addEventListener("input", () => {
+    state.accountingNumberEdited = true;
+  });
+  accountingForm.elements.dataOperatiunii.addEventListener("change", (event) => {
+    if (!state.editingAccountingId && !state.accountingNumberEdited) {
+      accountingForm.elements.nrCrt.value = nextAccountingEntryNumber(event.target.value);
+    }
+  });
 
   $("#search-input").addEventListener("input", (event) => {
     state.search = event.target.value;
@@ -1794,7 +2103,7 @@ function initializeAppUi() {
   document.querySelectorAll("[data-close-dialog]").forEach((button) => {
     button.addEventListener("click", () => document.getElementById(button.dataset.closeDialog).close());
   });
-  [eventDialog, inventoryDialog, settingsDialog, importDialog, accountDialog, productPickerDialog, productQuantityDialog, catalogItemDialog, categoryDialog].forEach((dialog) => {
+  [eventDialog, inventoryDialog, settingsDialog, importDialog, accountDialog, accountingDialog, productPickerDialog, productQuantityDialog, catalogItemDialog, categoryDialog].forEach((dialog) => {
     dialog.addEventListener("click", (event) => {
       if (event.target === dialog) dialog.close();
     });
@@ -1814,20 +2123,25 @@ if (!isFirebaseConfigured) {
     if (user) {
       $("#user-email").textContent = user.email ?? "";
       $("#settings-page-email").textContent = user.email ?? "";
+      showPage("hub");
       setScreen("app");
       startCatalogListeners();
       subscribeToEvents();
+      subscribeToAccountingEntries();
     } else {
       state.inventoryUnsubscribe?.();
       state.catalogUnsubscribe?.();
       state.categoriesUnsubscribe?.();
+      state.accountingUnsubscribe?.();
       state.events = [];
       state.inventory = [];
       state.catalog = [];
       state.categoryRecords = [];
+      state.accountingEntries = [];
+      state.accountingLoading = false;
       state.activeEventId = "";
       state.catalogMigrationStarted = false;
-      showPage("dashboard");
+      showPage("hub");
       setScreen("login");
     }
   }, (error) => {
