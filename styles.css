@@ -373,14 +373,6 @@ button.workspace-card:hover { transform: translateY(-2px); border-color: #b7d5e1
 .catalog-variant-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .catalog-variant-summary { min-width: min(100%, 290px); display: flex; align-items: center; gap: 8px; padding: 7px; border: 1px solid #e8eff2; border-radius: 9px; }
 .catalog-variant-summary .product-thumb { width: 36px; height: 36px; flex: 0 0 auto; }
-.catalog-variant-stock { min-width: 0; flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.catalog-variant-stock strong, .catalog-variant-stock small { display: block; }
-.catalog-variant-stock > span:first-child { min-width: 0; }
-.catalog-variant-stock > span:first-child strong { font-size: 0.76rem; }
-.catalog-variant-stock small { margin-top: 3px; color: var(--muted); font-size: 0.64rem; line-height: 1.3; }
-.catalog-stock-controls { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; }
-.catalog-stock-controls .stepper-button { width: 27px; height: 27px; }
-.catalog-stock-count { min-width: 20px; color: var(--ink); font-size: 0.82rem; text-align: center; font-variant-numeric: tabular-nums; }
 .variant-editor { display: grid; gap: 12px; }
 .variant-editor-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .variant-editor-heading h3 { margin: 0 0 4px; font-size: 0.94rem; }
@@ -390,7 +382,7 @@ button.workspace-card:hover { transform: translateY(-2px); border-color: #b7d5e1
 .catalog-variant-editor { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-soft); }
 .catalog-variant-editor-top { display: flex; align-items: center; justify-content: space-between; }
 .variant-index { color: var(--blue-dark); font-size: 0.75rem; font-weight: 800; }
-.variant-editor-fields { display: grid; grid-template-columns: 56px minmax(130px, 1fr) minmax(90px, 0.55fr) minmax(150px, 1.1fr); align-items: end; gap: 10px; }
+.variant-editor-fields { display: grid; grid-template-columns: 56px minmax(130px, 1fr) minmax(150px, 1.1fr); align-items: end; gap: 10px; }
 .variant-image-preview { width: 56px; height: 56px; }
 .variant-photo-picker input { padding: 6px; font-size: 0.7rem; }
 .variant-photo-picker small { color: var(--muted); font-size: 0.67rem; font-weight: 450; }
@@ -493,7 +485,7 @@ button.workspace-card:hover { transform: translateY(-2px); border-color: #b7d5e1
   .catalog-note { display: block; margin: 3px 0 0; font-size: 0.66rem; }
   .catalog-card-actions { gap: 6px; }
   .catalog-card-actions .button { flex: 1; min-height: 38px; padding: 7px; font-size: 0.68rem; }
-  .variant-editor-fields { grid-template-columns: 48px minmax(0, 1fr) minmax(80px, 0.7fr); gap: 8px; }
+  .variant-editor-fields { grid-template-columns: 48px minmax(0, 1fr); gap: 8px; }
   .variant-image-preview { width: 48px; height: 48px; }
   .variant-photo-picker { grid-column: 2 / -1; }
   .market-variant-stock { grid-template-columns: 42px minmax(0, 1fr) 76px; gap: 7px; padding: 7px; }

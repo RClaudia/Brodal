@@ -12,8 +12,8 @@ service cloud.firestore {
         && variant.id is string
         && variant.color is string
         && variant.imageBase64 is string
-        && variant.quantity is int
-        && variant.quantity >= 0;
+        && (!("quantity" in variant)
+          || (variant.quantity is int && variant.quantity >= 0));
     }
 
     function validColorVariants(variants) {

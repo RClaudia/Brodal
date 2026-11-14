@@ -24,6 +24,7 @@ import { auth, db, isFirebaseConfigured } from "./firebase-config.js";
 
 const $ = (selector) => document.querySelector(selector);
 const money = new Intl.NumberFormat("ro-RO", { style: "currency", currency: "RON" });
+const skuCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 const state = {
   user: null,
   events: [],
@@ -52,7 +53,6 @@ const state = {
   currentPage: "dashboard",
   currentModule: "hub",
   catalogMigrationStarted: false,
-  catalogQuantityMigrationStarted: false,
   toastTimer: null,
   inventoryLoading: false,
   accountingEntries: [],
@@ -188,43 +188,6 @@ function renderActiveEvent() {
   $("#event-details").textContent = [eventDateRange(event), event.location].filter(Boolean).join(" · ");
 }
 
-async function migrateCatalogVariantQuantities(products) {
-  if (state.catalogQuantityMigrationStarted || !navigator.onLine) return;
-  state.catalogQuantityMigrationStarted = true;
-
-  const missingQuantities = products.filter((product) => {
-    const data = product.data();
-    return !Array.isArray(data.variants)
-      || !data.variants.length
-      || data.variants.some((variant) => !Object.prototype.hasOwnProperty.call(variant, "quantity")
-        || variant.quantity == null);
-  });
-  if (!missingQuantities.length) return;
-
-  try {
-    for (const product of missingQuantities) {
-      const data = product.data();
-      const variants = Array.isArray(data.variants) && data.variants.length
-        ? data.variants.map((variant) => ({
-          ...variant,
-          quantity: variant.quantity == null ? 0 : variant.quantity
-        }))
-        : [{
-          id: "default",
-          color: String(data.color ?? "Standard"),
-          imageBase64: String(data.imageBase64 ?? ""),
-          quantity: 0
-        }];
-      await updateDoc(product.ref, { variants, updatedAt: serverTimestamp() });
-    }
-    toast(`Initialized catalog quantity to 0 for ${missingQuantities.length} item(s). Enter actual stock in Items.`);
-  } catch (error) {
-    state.catalogQuantityMigrationStarted = false;
-    console.error("Could not initialize missing catalog variant quantities.", error);
-    toast(`Could not initialize item quantities: ${error.message}. Check that the latest Firestore rules are published.`, true);
-  }
-}
-
 function subscribeToEvents() {
   onSnapshot(
     query(collection(db, "events")),
@@ -247,7 +210,6 @@ function startCatalogListeners() {
       .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? ""), undefined, { sensitivity: "base" }));
     renderCatalog();
     renderProductPicker();
-    void migrateCatalogVariantQuantities(snapshot.docs);
     if (!state.catalogMigrationStarted) {
       state.catalogMigrationStarted = true;
       void migrateInventoryToCatalog();
@@ -338,8 +300,7 @@ async function migrateInventoryToCatalog() {
           variants: [{
             id: "default",
             color: String(product.color ?? "Standard"),
-            imageBase64: String(product.imageBase64 ?? ""),
-            quantity: 0
+            imageBase64: String(product.imageBase64 ?? "")
           }],
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
@@ -394,7 +355,7 @@ function renderCatalog() {
       || String(product.sku ?? "").toLocaleLowerCase().includes(search)
       || String(product.name ?? "").toLocaleLowerCase().includes(search)
       || catalogVariants(product).some((variant) => variant.color.toLocaleLowerCase().includes(search)))
-  );
+  ).sort((a, b) => skuCollator.compare(String(a.sku ?? ""), String(b.sku ?? "")));
   if (![...$("#catalog-category-filter").options].some((option) => option.value === state.catalogCategory)) {
     state.catalogCategory = "All";
   }
@@ -413,14 +374,7 @@ function renderCatalog() {
         <div class="catalog-variant-list">${catalogVariants(product).map((variant) => `
           <div class="catalog-variant-summary">
             <span class="product-thumb">${imageMarkup({ imageBase64: variant.imageBase64 })}</span>
-            <span class="catalog-variant-stock">
-              <span><strong>${escapeHtml(variant.color)}</strong><small>Catalog stock · separate from market stock</small></span>
-              <span class="catalog-stock-controls">
-                <button class="stepper-button" type="button" data-catalog-stock-action="decrease" data-id="${escapeHtml(product.id)}" data-variant-id="${escapeHtml(variant.id)}" aria-label="Remove one ${escapeHtml(variant.color)} item from catalog stock" ${numberValue(variant.quantity) <= 0 ? "disabled" : ""}>−</button>
-                <strong class="catalog-stock-count">${numberValue(variant.quantity)}</strong>
-                <button class="stepper-button" type="button" data-catalog-stock-action="increase" data-id="${escapeHtml(product.id)}" data-variant-id="${escapeHtml(variant.id)}" aria-label="Add one ${escapeHtml(variant.color)} item to catalog stock">+</button>
-              </span>
-            </span>
+            <strong>${escapeHtml(variant.color)}</strong>
           </div>
         `).join("")}</div>
         <p class="muted catalog-note">Price changes apply to future markets only.</p>
@@ -436,20 +390,30 @@ function renderCatalog() {
   $("#catalog-loading").hidden = true;
 }
 
+function nextCatalogSku(products) {
+  const numericSkus = products
+    .map((product) => String(product.sku ?? "").trim())
+    .filter((sku) => /^\d+$/.test(sku));
+  const nextNumber = numericSkus.reduce((maximum, sku) => {
+    const value = BigInt(sku);
+    return value > maximum ? value : maximum;
+  }, 0n) + 1n;
+  const width = Math.max(3, ...numericSkus.map((sku) => sku.length));
+  return String(nextNumber).padStart(width, "0");
+}
+
 function catalogVariants(product) {
   if (Array.isArray(product.variants) && product.variants.length) {
     return product.variants.map((variant) => ({
       id: String(variant.id ?? ""),
       color: String(variant.color ?? "Standard"),
-      imageBase64: String(variant.imageBase64 ?? ""),
-      quantity: Math.max(0, Math.floor(numberValue(variant.quantity)))
+      imageBase64: String(variant.imageBase64 ?? "")
     }));
   }
   return [{
     id: "default",
     color: String(product.color ?? "Standard"),
-    imageBase64: String(product.imageBase64 ?? ""),
-    quantity: 0
+    imageBase64: String(product.imageBase64 ?? "")
   }];
 }
 
@@ -479,35 +443,10 @@ function renderCatalogVariants() {
       <div class="variant-editor-fields">
         <div class="product-thumb variant-image-preview">${imageMarkup({ imageBase64: variant.imageBase64 })}</div>
         <label>Color name<input data-variant-color type="text" maxlength="50" value="${escapeHtml(variant.color)}" placeholder="e.g. Red background" required></label>
-        <label>Catalog quantity<input data-variant-quantity type="number" min="0" step="1" inputmode="numeric" value="${numberValue(variant.quantity)}" required></label>
         <label class="variant-photo-picker">Photo<input data-variant-image type="file" accept="image/*"><small>Optional image for this color.</small></label>
       </div>
     </article>
   `).join("");
-}
-
-async function changeCatalogVariantQuantity(productId, variantId, delta, button) {
-  const product = state.catalog.find((item) => item.id === productId);
-  if (!product) return;
-  const variants = catalogVariants(product);
-  const variant = variants.find((item) => item.id === variantId);
-  if (!variant) return;
-  const quantity = numberValue(variant.quantity) + delta;
-  if (!Number.isInteger(quantity) || quantity < 0) return;
-  const controls = [...button.closest(".catalog-stock-controls").querySelectorAll("button")];
-  controls.forEach((control) => { control.disabled = true; });
-  try {
-    await updateDoc(doc(db, "products", productId), {
-      variants: variants.map((item) => item.id === variantId ? { ...item, quantity } : item),
-      updatedAt: serverTimestamp()
-    });
-    toast(`${variant.color} catalog quantity updated.`);
-  } catch (error) {
-    console.error("Could not update catalog variant quantity.", error);
-    toast(`Could not update catalog quantity: ${error.message}`, true);
-  } finally {
-    controls.forEach((control) => { control.disabled = false; });
-  }
 }
 
 function renderProductPicker() {
@@ -1104,7 +1043,7 @@ function openProductQuantityDialog(product) {
     <label class="market-variant-stock" data-market-variant-id="${escapeHtml(variant.id)}">
       <span class="product-thumb">${imageMarkup({ imageBase64: variant.imageBase64 })}</span>
       <span class="market-variant-copy"><strong>${escapeHtml(variant.color)}</strong><small>Initial market quantity</small></span>
-      <input data-market-variant-quantity type="number" min="0" step="1" inputmode="numeric" value="${numberValue(variant.quantity)}" aria-label="${escapeHtml(variant.color)} initial quantity" required>
+      <input data-market-variant-quantity type="number" min="0" step="1" inputmode="numeric" value="0" aria-label="${escapeHtml(variant.color)} initial quantity" required>
     </label>
   `).join("");
   $("#product-quantity-error").hidden = true;
@@ -1116,7 +1055,7 @@ function openCatalogItemDialog(product = null) {
   state.editingCatalogId = product?.id ?? null;
   state.catalogVariants = product
     ? catalogVariants(product).map((variant) => ({ ...variant }))
-    : [{ id: createVariantId(), color: "Standard", imageBase64: "", quantity: 0 }];
+    : [{ id: createVariantId(), color: "Standard", imageBase64: "" }];
   $("#catalog-item-title").textContent = product ? "Edit Item" : "Add Item";
   $("#catalog-item-eyebrow").textContent = product ? "UPDATE ITEM CATALOG" : "PRODUCT CATALOG";
   $("#save-catalog-item-button").textContent = product ? "Save changes" : "Save item";
@@ -1129,6 +1068,8 @@ function openCatalogItemDialog(product = null) {
     $("#catalog-item-form").elements.price.value = numberValue(product.price);
     $("#catalog-item-form").elements.unitCost.value = numberValue(product.unitCost);
     $("#catalog-item-form").elements.notes.value = product.notes ?? "";
+  } else {
+    $("#catalog-item-form").elements.sku.value = nextCatalogSku(state.catalog);
   }
   renderCatalogVariants();
   catalogItemDialog.showModal();
@@ -1153,13 +1094,10 @@ async function handleCatalogItemSubmit(event) {
     const variants = [...form.querySelectorAll("[data-variant-row]")].map((row) => ({
       id: row.dataset.variantId,
       color: row.querySelector("[data-variant-color]").value.trim(),
-      imageBase64: state.catalogVariants.find((variant) => variant.id === row.dataset.variantId)?.imageBase64 ?? "",
-      quantity: Number(row.querySelector("[data-variant-quantity]").value)
+      imageBase64: state.catalogVariants.find((variant) => variant.id === row.dataset.variantId)?.imageBase64 ?? ""
     }));
     if (!variants.length || variants.length > 12) throw new Error("An item must have between 1 and 12 color variants.");
-    if (variants.some((variant) => !variant.color || !Number.isInteger(variant.quantity) || variant.quantity < 0)) {
-      throw new Error("Each color variant needs a name and a whole-number quantity of zero or more.");
-    }
+    if (variants.some((variant) => !variant.color)) throw new Error("Each color variant needs a name.");
     if (new Set(variants.map((variant) => variant.color.toLocaleLowerCase())).size !== variants.length) {
       throw new Error("Each color variant must have a unique name.");
     }
@@ -2179,16 +2117,6 @@ function initializeAppUi() {
     renderCatalog();
   });
   $("#catalog-grid").addEventListener("click", (event) => {
-    const stockButton = event.target.closest("[data-catalog-stock-action]");
-    if (stockButton) {
-      void changeCatalogVariantQuantity(
-        stockButton.dataset.id,
-        stockButton.dataset.variantId,
-        stockButton.dataset.catalogStockAction === "increase" ? 1 : -1,
-        stockButton
-      );
-      return;
-    }
     const button = event.target.closest("[data-catalog-action]");
     if (!button) return;
     const { catalogAction, id } = button.dataset;
@@ -2202,7 +2130,7 @@ function initializeAppUi() {
       toast("An item can have up to 12 color variants.", true);
       return;
     }
-    state.catalogVariants.push({ id: createVariantId(), color: "", imageBase64: "", quantity: 0 });
+    state.catalogVariants.push({ id: createVariantId(), color: "", imageBase64: "" });
     renderCatalogVariants();
   });
   $("#catalog-variants").addEventListener("click", (event) => {
@@ -2393,7 +2321,6 @@ if (!isFirebaseConfigured) {
       state.accountingLoading = false;
       state.activeEventId = "";
       state.catalogMigrationStarted = false;
-      state.catalogQuantityMigrationStarted = false;
       showPage("hub");
       setScreen("login");
     }
