@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "Brodal Handmade Inventory",
-  "short_name": "Brodal Stock",
-  "description": "Track handmade products, market stock, and sales.",
+  "name": "Brodal Workspace",
+  "short_name": "Brodal",
+  "description": "Manage Brodal inventory, markets, items, and accounting.",
   "lang": "en",
   "start_url": "./",
   "scope": "./",
