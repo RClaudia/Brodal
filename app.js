@@ -29,6 +29,11 @@ const state = {
   user: null,
   events: [],
   activeEventId: "",
+  marketHistoryYear: "all",
+  marketHistorySoldTotals: {},
+  marketHistoryHasInventoryTotals: false,
+  marketHistoryLoading: false,
+  marketHistoryError: "",
   inventory: [],
   selectedCategory: "All",
   search: "",
@@ -70,6 +75,7 @@ const state = {
 const loginScreen = $("#login-screen");
 const appShell = $("#app-shell");
 const eventDialog = $("#event-dialog");
+const marketCloseDialog = $("#market-close-dialog");
 const inventoryDialog = $("#inventory-dialog");
 const productPickerDialog = $("#product-picker-dialog");
 const productQuantityDialog = $("#product-quantity-dialog");
@@ -156,6 +162,26 @@ function eventDateRange(event) {
   return endDate && endDate !== startDate ? `${startDate} – ${endDate}` : startDate;
 }
 
+function eventIsClosed(event) {
+  return event?.status === "closed";
+}
+
+function soldQuantityForMarket(items) {
+  return items.reduce((total, item) => total + numberValue(item.soldQty), 0);
+}
+
+function marketDurationDays(event) {
+  const start = String(event.startDate ?? event.date ?? "");
+  const end = String(event.endDate ?? event.date ?? start);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) return 0;
+  return Math.floor((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86400000) + 1;
+}
+
+function marketDateLabel(value) {
+  const [year, month, day] = String(value ?? "").split("-");
+  return year && month && day ? `${day}.${month}.${year}` : "";
+}
+
 function renderEvents() {
   const selectedId = state.activeEventId;
   if (!state.events.some((event) => event.id === selectedId)) {
@@ -168,27 +194,127 @@ function renderEvents() {
   $("#event-menu").innerHTML = state.events.map((event) => `
     <button class="event-menu-option" type="button" role="option" data-event-id="${escapeHtml(event.id)}" aria-selected="${event.id === state.activeEventId}">
       <span class="event-menu-name">${escapeHtml(event.name)}</span>
-      <span class="event-menu-meta">${escapeHtml(event.type)} · ${escapeHtml(eventDateRange(event))}</span>
+      <span class="event-menu-meta">${escapeHtml(event.type)} · ${escapeHtml(eventDateRange(event))}${eventIsClosed(event) ? " · Closed" : ""}</span>
     </button>
   `).join("");
   if (state.events.length === 0) {
     $("#event-menu").hidden = true;
     $("#event-select-button").setAttribute("aria-expanded", "false");
   }
-  $("#add-inventory-button").disabled = !state.activeEventId;
-  $("#mobile-add-button").disabled = !state.activeEventId;
+  const selectedEvent = state.events.find((event) => event.id === state.activeEventId);
+  $("#add-inventory-button").disabled = !selectedEvent || eventIsClosed(selectedEvent);
+  $("#mobile-add-button").disabled = !selectedEvent || eventIsClosed(selectedEvent);
   renderActiveEvent();
   subscribeToInventory();
+  renderMarketHistory();
 }
 
 function renderActiveEvent() {
   const event = state.events.find((item) => item.id === state.activeEventId);
   const heading = $("#event-heading");
   heading.hidden = !event;
-  if (!event) return;
+  if (!event) {
+    $("#close-market-button").hidden = true;
+    $("#refresh-market-total-button").hidden = true;
+    return;
+  }
   $("#event-type").textContent = event.type;
   $("#event-name").textContent = event.name;
-  $("#event-details").textContent = [eventDateRange(event), event.location].filter(Boolean).join(" · ");
+  $("#event-details").textContent = [eventDateRange(event), event.location, event.organizer].filter(Boolean).join(" · ");
+  $("#event-status").textContent = eventIsClosed(event) ? "Closed" : "In progress";
+  $("#event-status").classList.toggle("is-closed", eventIsClosed(event));
+  $("#close-market-button").hidden = event.type !== "Market" || eventIsClosed(event);
+  $("#refresh-market-total-button").hidden = event.type !== "Market" || !eventIsClosed(event);
+}
+
+function renderMarketHistory() {
+  const tableBody = $("#market-history-table-body");
+  if (!tableBody) return;
+  const markets = state.events.filter((event) => event.type === "Market");
+  const years = [...new Set(markets.map((event) => String(event.startDate ?? event.date ?? "").slice(0, 4))
+    .filter((year) => /^\d{4}$/.test(year)))].sort((a, b) => b.localeCompare(a));
+  const yearSelect = $("#market-history-year");
+  const previousYear = state.marketHistoryYear;
+  yearSelect.innerHTML = `<option value="all">All years</option>${years.map((year) => `<option value="${year}">${year}</option>`).join("")}`;
+  if (state.marketHistoryYear !== "all" && !years.includes(state.marketHistoryYear)) state.marketHistoryYear = "all";
+  yearSelect.value = state.marketHistoryYear;
+  if (previousYear !== state.marketHistoryYear) $("#market-history-year").value = state.marketHistoryYear;
+  const filtered = markets.filter((market) => state.marketHistoryYear === "all"
+    || String(market.startDate ?? market.date ?? "").slice(0, 4) === state.marketHistoryYear);
+  const grouped = new Map();
+  filtered.forEach((market) => {
+    const year = String(market.startDate ?? market.date ?? "").slice(0, 4);
+    if (!grouped.has(year)) grouped.set(year, []);
+    grouped.get(year).push(market);
+  });
+
+  $("#market-history-status").hidden = !state.marketHistoryLoading && !state.marketHistoryError;
+  $("#market-history-status").textContent = state.marketHistoryError
+    || (state.marketHistoryLoading ? "Loading sold-item totals…" : "");
+  $("#market-history-empty").hidden = state.marketHistoryLoading || filtered.length > 0;
+  const rows = [];
+  [...grouped.keys()].sort((a, b) => b.localeCompare(a)).forEach((year) => {
+    const yearMarkets = grouped.get(year).sort((a, b) =>
+      String(b.startDate ?? b.date ?? "").localeCompare(String(a.startDate ?? a.date ?? "")));
+    const totals = { cash: 0, bank: 0, income: 0, sold: 0 };
+    yearMarkets.forEach((market) => {
+      const cash = numberValue(market.cashIncome);
+      const bank = numberValue(market.bankIncome);
+      const sold = typeof market.totalItemsSold === "number"
+        ? market.totalItemsSold
+        : state.marketHistoryHasInventoryTotals
+          ? numberValue(state.marketHistorySoldTotals[market.id])
+          : null;
+      totals.cash += cash;
+      totals.bank += bank;
+      totals.income += cash + bank;
+      if (sold !== null) totals.sold += sold;
+      const start = marketDateLabel(market.startDate ?? market.date);
+      const end = marketDateLabel(market.endDate ?? market.date ?? market.startDate);
+      rows.push(`<tr>
+        <td>${escapeHtml(start)}${end && end !== start ? ` – ${escapeHtml(end)}` : ""}</td>
+        <td>${marketDurationDays(market)}</td>
+        <td>${escapeHtml(market.location ?? "")}</td>
+        <td>${escapeHtml(market.organizer ?? "")}</td>
+        <td>${escapeHtml(market.edition ?? "")}</td>
+        <td>${money.format(cash)}</td>
+        <td>${money.format(bank)}</td>
+        <td>${money.format(cash + bank)}</td>
+        <td>${sold === null ? "—" : sold}</td>
+      </tr>`);
+    });
+    rows.push(`<tr class="market-history-total-row">
+      <th colspan="5" scope="row">Total for ${escapeHtml(year)}</th>
+      <td>${money.format(totals.cash)}</td>
+      <td>${money.format(totals.bank)}</td>
+      <td>${money.format(totals.income)}</td>
+      <td>${state.marketHistoryHasInventoryTotals || yearMarkets.every((market) => typeof market.totalItemsSold === "number") ? totals.sold : "—"}</td>
+    </tr>`);
+  });
+  tableBody.innerHTML = rows.join("");
+}
+
+async function loadMarketHistoryInventoryTotals() {
+  state.marketHistoryLoading = true;
+  state.marketHistoryError = "";
+  renderMarketHistory();
+  try {
+    const snapshot = await getDocsFromServer(collection(db, "inventory"));
+    const totals = {};
+    snapshot.docs.forEach((document) => {
+      const item = document.data();
+      totals[item.marketId] = (totals[item.marketId] ?? 0) + numberValue(item.soldQty);
+    });
+    state.marketHistorySoldTotals = totals;
+    state.marketHistoryHasInventoryTotals = true;
+  } catch (error) {
+    state.marketHistoryError = `Could not load sold-item totals: ${error.message}`;
+    console.error("Could not load market history inventory totals.", error);
+    toast(state.marketHistoryError, true);
+  } finally {
+    state.marketHistoryLoading = false;
+    renderMarketHistory();
+  }
 }
 
 function subscribeToEvents() {
@@ -383,7 +509,7 @@ function renderCatalog() {
         <p class="muted catalog-note">Price changes apply to future markets only.</p>
         <div class="catalog-card-actions">
           <button class="button button-outline" type="button" data-catalog-action="edit" data-id="${escapeHtml(product.id)}">Edit item / price</button>
-          <button class="button button-primary" type="button" data-catalog-action="add" data-id="${escapeHtml(product.id)}" ${!state.activeEventId || !missingCatalogVariants(product).length ? "disabled" : ""}>Add to current market</button>
+          <button class="button button-primary" type="button" data-catalog-action="add" data-id="${escapeHtml(product.id)}" ${!state.activeEventId || eventIsClosed(state.events.find((event) => event.id === state.activeEventId)) || !missingCatalogVariants(product).length ? "disabled" : ""}>Add to current market</button>
           <button class="button button-danger" type="button" data-catalog-action="delete" data-id="${escapeHtml(product.id)}">Remove</button>
         </div>
       </div>
@@ -464,7 +590,8 @@ function renderProductPicker() {
   $("#product-picker-list").innerHTML = products.map((product) => {
     const remaining = missingCatalogVariants(product);
     const alreadyAdded = remaining.length === 0;
-    return `<button class="picker-product" type="button" data-picker-product="${escapeHtml(product.id)}" ${alreadyAdded ? "disabled" : ""}>
+    const closed = eventIsClosed(state.events.find((event) => event.id === state.activeEventId));
+    return `<button class="picker-product" type="button" data-picker-product="${escapeHtml(product.id)}" ${alreadyAdded || closed ? "disabled" : ""}>
       <span class="product-thumb">${imageMarkup({ imageBase64: catalogVariants(product)[0]?.imageBase64 })}</span>
       <span class="picker-product-main"><strong>${escapeHtml(product.name)}</strong><small>${escapeHtml(product.sku)} · ${escapeHtml(product.category)} · ${remaining.length} color${remaining.length === 1 ? "" : "s"} to add</small></span>
       <span class="picker-product-price">${money.format(numberValue(product.price))}</span>
@@ -496,6 +623,7 @@ function showPage(name) {
   $("#inventory-home-page").hidden = name !== "inventory-home";
   $("#accounting-page").hidden = name !== "accounting";
   $("#dashboard-page").hidden = name !== "dashboard";
+  $("#market-history-page").hidden = name !== "market-history";
   $("#items-page").hidden = name !== "items";
   $("#settings-page").hidden = name !== "settings";
   $(".mobile-action-bar").hidden = name !== "dashboard";
@@ -507,6 +635,7 @@ function showPage(name) {
   $("#workspace-button").setAttribute("aria-current", name === "hub" ? "page" : "false");
   if (name === "items") renderCatalog();
   if (name === "accounting") renderAccounting();
+  if (name === "market-history") void loadMarketHistoryInventoryTotals();
 }
 
 function localDateString(date = new Date()) {
@@ -1010,27 +1139,30 @@ function imageMarkup(item) {
 function soldControls(item) {
   const sold = numberValue(item.soldQty);
   const total = numberValue(item.totalQty);
+  const disabled = eventIsClosed(state.events.find((event) => event.id === state.activeEventId));
   return `<span class="sold-control">
-    <button class="stepper-button" type="button" data-action="sold-minus" data-id="${escapeHtml(item.id)}" aria-label="Record one fewer sold for ${escapeHtml(item.name)}" ${sold <= 0 ? "disabled" : ""}>−</button>
+    <button class="stepper-button" type="button" data-action="sold-minus" data-id="${escapeHtml(item.id)}" aria-label="Record one fewer sold for ${escapeHtml(item.name)}" ${disabled || sold <= 0 ? "disabled" : ""}>−</button>
     <strong>${sold}</strong>
-    <button class="stepper-button" type="button" data-action="sold-plus" data-id="${escapeHtml(item.id)}" aria-label="Record one sold for ${escapeHtml(item.name)}" ${sold >= total ? "disabled" : ""}>+</button>
+    <button class="stepper-button" type="button" data-action="sold-plus" data-id="${escapeHtml(item.id)}" aria-label="Record one sold for ${escapeHtml(item.name)}" ${disabled || sold >= total ? "disabled" : ""}>+</button>
   </span>`;
 }
 
 function totalQuantityControls(item) {
   const total = numberValue(item.totalQty);
   const sold = numberValue(item.soldQty);
+  const disabled = eventIsClosed(state.events.find((event) => event.id === state.activeEventId));
   return `<span class="sold-control">
-    <button class="stepper-button" type="button" data-action="total-minus" data-id="${escapeHtml(item.id)}" aria-label="Remove one from stock for ${escapeHtml(item.name)}" ${total <= sold ? "disabled" : ""}>−</button>
+    <button class="stepper-button" type="button" data-action="total-minus" data-id="${escapeHtml(item.id)}" aria-label="Remove one from stock for ${escapeHtml(item.name)}" ${disabled || total <= sold ? "disabled" : ""}>−</button>
     <strong>${total}</strong>
-    <button class="stepper-button" type="button" data-action="total-plus" data-id="${escapeHtml(item.id)}" aria-label="Add one to stock for ${escapeHtml(item.name)}">+</button>
+    <button class="stepper-button" type="button" data-action="total-plus" data-id="${escapeHtml(item.id)}" aria-label="Add one to stock for ${escapeHtml(item.name)}" ${disabled ? "disabled" : ""}>+</button>
   </span>`;
 }
 
 function productActions(item) {
+  const disabled = eventIsClosed(state.events.find((event) => event.id === state.activeEventId));
   return `<span class="row-actions">
-    <button class="text-button" type="button" data-action="edit" data-id="${escapeHtml(item.id)}">Edit</button>
-    <button class="text-button danger" type="button" data-action="delete" data-id="${escapeHtml(item.id)}">Delete</button>
+    <button class="text-button" type="button" data-action="edit" data-id="${escapeHtml(item.id)}" ${disabled ? "disabled" : ""}>Edit</button>
+    <button class="text-button danger" type="button" data-action="delete" data-id="${escapeHtml(item.id)}" ${disabled ? "disabled" : ""}>Delete</button>
   </span>`;
 }
 
@@ -1066,6 +1198,7 @@ function renderCategoryPills() {
 
 function renderInventory() {
   const event = state.events.find((item) => item.id === state.activeEventId);
+  const marketClosed = eventIsClosed(event);
   const loading = $("#inventory-loading");
   const empty = $("#empty-state");
   const mobile = $("#mobile-inventory");
@@ -1076,18 +1209,19 @@ function renderInventory() {
   renderSummary();
   renderCategoryPills();
   $("#inventory-count").textContent = event
-    ? `${filtered.length} ${filtered.length === 1 ? "product" : "products"}${filtered.length !== state.inventory.length ? ` shown · ${state.inventory.length} total` : ""}`
+    ? `${filtered.length} ${filtered.length === 1 ? "product" : "products"}${filtered.length !== state.inventory.length ? ` shown · ${state.inventory.length} total` : ""}${marketClosed ? " · Market closed (read-only)" : ""}`
     : "Choose or create an event to manage its products.";
 
   const showEmpty = !state.inventoryLoading && (state.inventory.length === 0 || filtered.length === 0);
   empty.hidden = !showEmpty;
   if (state.inventory.length === 0) {
-    $("#empty-title").textContent = event ? "Your inventory starts here" : "Create your first event";
+    $("#empty-title").textContent = event ? (marketClosed ? "Market inventory is closed" : "Your inventory starts here") : "Create your first event";
     $("#empty-description").textContent = event
-      ? "Add your first product to keep its stock and sales close at hand."
+      ? marketClosed ? "This market is closed. Its recorded products and sales are kept as history." : "Add your first product to keep its stock and sales close at hand."
       : "Set up a market or shop update before adding products.";
     $("#empty-add-button").textContent = event ? "＋ Add your first product" : "＋ New Event";
     $("#empty-add-button").dataset.action = event ? "add" : "new-event";
+    $("#empty-add-button").hidden = marketClosed;
   } else if (filtered.length === 0) {
     $("#empty-title").textContent = "No matching products";
     $("#empty-description").textContent = "Try another search or choose a different category.";
@@ -1200,8 +1334,9 @@ function renderImagePreview() {
 }
 
 function openInventoryDialog(item = null) {
-  if (!state.activeEventId) {
-    toast("Create or choose an event before adding inventory.", true);
+  const event = state.events.find((current) => current.id === state.activeEventId);
+  if (!event || eventIsClosed(event)) {
+    toast(event ? "This market is closed and its inventory is read-only." : "Create or choose an event before adding inventory.", true);
     return;
   }
   if (!item) {
@@ -1218,8 +1353,9 @@ function openInventoryDialog(item = null) {
 }
 
 function openProductQuantityDialog(product) {
-  if (!state.activeEventId) {
-    toast("Create or choose an event before adding inventory.", true);
+  const event = state.events.find((current) => current.id === state.activeEventId);
+  if (!event || eventIsClosed(event)) {
+    toast(event ? "This market is closed and its inventory is read-only." : "Create or choose an event before adding inventory.", true);
     return;
   }
   const variants = missingCatalogVariants(product);
@@ -1336,7 +1472,8 @@ async function deleteCatalogItem(id) {
 async function handleProductQuantitySubmit(event) {
   event.preventDefault();
   const product = state.catalog.find((item) => item.id === state.selectedCatalogProductId);
-  if (!product || !state.activeEventId) return;
+  const market = state.events.find((item) => item.id === state.activeEventId);
+  if (!product || !market || eventIsClosed(market)) return;
   const error = $("#product-quantity-error");
   clearError(error);
   const submitButton = event.currentTarget.querySelector('button[type="submit"]');
@@ -1508,6 +1645,8 @@ function openSettingsDialog() {
     settingsForm.elements.startDate.value = event.startDate ?? event.date ?? "";
     settingsForm.elements.endDate.value = event.endDate ?? event.date ?? "";
     settingsForm.elements.location.value = event.location ?? "";
+    settingsForm.elements.organizer.value = event.organizer ?? "";
+    settingsForm.elements.edition.value = event.edition ?? "";
   }
   settingsDialog.showModal();
 }
@@ -1523,6 +1662,8 @@ function openImportDialog() {
   $("#import-event-end-date").value = todayValue;
   $("#import-event-name").value = "";
   $("#import-event-location").value = "";
+  $("#import-event-organizer").value = "";
+  $("#import-event-edition").value = "";
   $("#import-event-type").value = "Market";
   $("#import-csv-file").value = "";
   clearError($("#import-form-error"));
@@ -1752,6 +1893,12 @@ async function importMarketFromCsv() {
       startDate,
       endDate,
       location: $("#import-event-location").value.trim(),
+      organizer: $("#import-event-organizer").value.trim(),
+      edition: $("#import-event-edition").value.trim(),
+      status: "open",
+      cashIncome: 0,
+      bankIncome: 0,
+      totalItemsSold: 0,
       createdAt: serverTimestamp()
     };
 
@@ -1861,17 +2008,19 @@ async function createEvent(eventData) {
   }
 
   const eventRef = doc(collection(db, "events"));
-  const eventWrite = setDoc(eventRef, {
+  await setDoc(eventRef, {
     name: eventData.name.trim(),
     type: eventData.type,
     startDate: eventData.startDate,
     endDate: eventData.endDate,
     location: eventData.location.trim(),
+    organizer: eventData.organizer.trim(),
+    edition: eventData.edition.trim(),
+    status: "open",
+    cashIncome: 0,
+    bankIncome: 0,
+    totalItemsSold: 0,
     createdAt: serverTimestamp()
-  });
-  void eventWrite.catch((error) => {
-    console.error("Could not save event.", error);
-    toast(`Could not save event: ${error.message}`, true);
   });
 
   if (products.length) {
@@ -1896,10 +2045,7 @@ async function createEvent(eventData) {
           updatedAt: serverTimestamp()
         });
       });
-      void batch.commit().catch((error) => {
-        console.error("Could not copy catalog items.", error);
-        toast(`Could not copy catalog items: ${error.message}`, true);
-      });
+      await batch.commit();
     }
   }
   return products.length;
@@ -1922,6 +2068,8 @@ async function handleEventSubmit(event) {
       startDate: formData.get("startDate"),
       endDate: formData.get("endDate"),
       location: formData.get("location") ?? "",
+      organizer: formData.get("organizer") ?? "",
+      edition: formData.get("edition") ?? "",
       copyCatalog: formData.has("copyCatalog")
     });
     eventDialog.close();
@@ -1933,6 +2081,94 @@ async function handleEventSubmit(event) {
     showError($("#event-form-error"), error.message);
   } finally {
     submitButton.disabled = false;
+  }
+}
+
+function openMarketCloseDialog() {
+  const market = state.events.find((event) => event.id === state.activeEventId);
+  if (!market || market.type !== "Market" || eventIsClosed(market)) return;
+  $("#market-close-form").reset();
+  $("#market-close-name").textContent = market.name;
+  $("#market-close-sold-count").textContent = String(soldQuantityForMarket(state.inventory));
+  clearError($("#market-close-error"));
+  marketCloseDialog.showModal();
+}
+
+async function saveMarketSoldTotal(market) {
+  const snapshot = await getDocsFromServer(query(
+    collection(db, "inventory"),
+    where("marketId", "==", market.id)
+  ));
+  const totalItemsSold = soldQuantityForMarket(snapshot.docs.map((item) => item.data()));
+  await updateDoc(doc(db, "events", market.id), { totalItemsSold });
+  state.marketHistorySoldTotals[market.id] = totalItemsSold;
+  state.marketHistoryHasInventoryTotals = true;
+  renderMarketHistory();
+  return totalItemsSold;
+}
+
+async function handleMarketCloseSubmit(event) {
+  event.preventDefault();
+  const market = state.events.find((item) => item.id === state.activeEventId);
+  const button = $("#confirm-market-close-button");
+  const errorElement = $("#market-close-error");
+  clearError(errorElement);
+  if (!market || market.type !== "Market" || eventIsClosed(market)) return;
+  if (!navigator.onLine) {
+    showError(errorElement, "Connect to the internet before closing a market so its final sales can be verified.");
+    return;
+  }
+  button.disabled = true;
+  try {
+    const formData = new FormData($("#market-close-form"));
+    const cashIncome = Number(formData.get("cashIncome"));
+    const bankIncome = Number(formData.get("bankIncome"));
+    if (![cashIncome, bankIncome].every((amount) => Number.isFinite(amount) && amount >= 0)) {
+      throw new Error("Enter valid non-negative cash and bank income amounts.");
+    }
+
+    const inventorySnapshot = await getDocsFromServer(query(
+      collection(db, "inventory"),
+      where("marketId", "==", market.id)
+    ));
+    const totalItemsSold = soldQuantityForMarket(inventorySnapshot.docs.map((item) => item.data()));
+    await updateDoc(doc(db, "events", market.id), {
+      status: "closed",
+      cashIncome,
+      bankIncome,
+      totalItemsSold,
+      closedAt: serverTimestamp()
+    });
+
+    try {
+      await saveMarketSoldTotal(market);
+    } catch (refreshError) {
+      console.error("Could not refresh final market sold total.", refreshError);
+      toast(`Market closed, but the final sold total could not be refreshed: ${refreshError.message}`, true);
+    }
+    marketCloseDialog.close();
+    toast(`Market closed. Recorded income: ${money.format(cashIncome + bankIncome)}.`);
+  } catch (error) {
+    console.error("Could not close market.", error);
+    showError(errorElement, error.message);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function refreshMarketSoldTotal() {
+  const market = state.events.find((event) => event.id === state.activeEventId);
+  if (!market || !eventIsClosed(market)) return;
+  const button = $("#refresh-market-total-button");
+  button.disabled = true;
+  try {
+    const total = await saveMarketSoldTotal(market);
+    toast(`Final sold total updated to ${total}.`);
+  } catch (error) {
+    console.error("Could not refresh market sold total.", error);
+    toast(`Could not refresh market sold total: ${error.message}`, true);
+  } finally {
+    button.disabled = false;
   }
 }
 
@@ -1958,7 +2194,9 @@ async function handleSettingsSubmit(event) {
       type: String(formData.get("type")),
       startDate,
       endDate,
-      location: String(formData.get("location") ?? "").trim()
+      location: String(formData.get("location") ?? "").trim(),
+      organizer: String(formData.get("organizer") ?? "").trim(),
+      edition: String(formData.get("edition") ?? "").trim()
     });
     settingsDialog.close();
     toast("Event settings saved.");
@@ -2013,6 +2251,10 @@ async function handleInventorySubmit(event) {
   clearError(error);
   submitButton.disabled = true;
   try {
+    const market = state.events.find((item) => item.id === state.activeEventId);
+    if (!market || eventIsClosed(market)) {
+      throw new Error(market ? "This market is closed and its inventory is read-only." : "Create or choose an open market first.");
+    }
     const formData = new FormData(inventoryForm);
     const totalQty = Math.max(0, Math.floor(numberValue(formData.get("totalQty"))));
     const soldQty = Math.max(0, Math.floor(numberValue(formData.get("soldQty"))));
@@ -2060,6 +2302,7 @@ async function handleInventorySubmit(event) {
 }
 
 async function changeSoldCount(id, delta) {
+  if (eventIsClosed(state.events.find((event) => event.id === state.activeEventId))) return;
   const item = state.inventory.find((product) => product.id === id);
   if (!item) return;
   const nextSold = numberValue(item.soldQty) + delta;
@@ -2083,6 +2326,7 @@ async function changeSoldCount(id, delta) {
 }
 
 async function changeTotalCount(id, delta) {
+  if (eventIsClosed(state.events.find((event) => event.id === state.activeEventId))) return;
   const item = state.inventory.find((product) => product.id === id);
   if (!item) return;
   const nextTotal = numberValue(item.totalQty) + delta;
@@ -2106,6 +2350,10 @@ async function changeTotalCount(id, delta) {
 }
 
 async function deleteProduct(id) {
+  if (eventIsClosed(state.events.find((event) => event.id === state.activeEventId))) {
+    toast("This market is closed and its inventory is read-only.", true);
+    return;
+  }
   const item = state.inventory.find((product) => product.id === id);
   if (!item || !window.confirm(`Delete "${item.name}" from this event? This cannot be undone.`)) return;
   try {
@@ -2237,6 +2485,15 @@ function initializeAppUi() {
     if (event.target.closest('[data-inventory-page="markets"]')) showPage("dashboard");
   });
   $("#dashboard-page-button").addEventListener("click", () => showPage("dashboard"));
+  $("#market-history-button").addEventListener("click", () => showPage("market-history"));
+  $("#market-inventory-button").addEventListener("click", () => showPage("dashboard"));
+  $("#market-history-year").addEventListener("change", (event) => {
+    state.marketHistoryYear = event.currentTarget.value;
+    renderMarketHistory();
+  });
+  $("#close-market-button").addEventListener("click", openMarketCloseDialog);
+  $("#refresh-market-total-button").addEventListener("click", () => void refreshMarketSoldTotal());
+  $("#market-close-form").addEventListener("submit", handleMarketCloseSubmit);
   $("#items-page-button").addEventListener("click", () => showPage("items"));
   $("#settings-button").addEventListener("click", () => {
     $("#settings-page-email").textContent = state.user?.email ?? "";

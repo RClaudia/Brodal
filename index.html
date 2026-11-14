@@ -230,6 +230,7 @@
             </button>
             <div id="event-menu" class="event-menu" role="listbox" aria-labelledby="event-select-label" hidden></div>
           </div>
+          <button id="market-history-button" class="button button-outline" type="button">Market history</button>
           <button id="new-event-button" class="button button-outline" type="button">＋ New Event</button>
         </section>
 
@@ -238,6 +239,11 @@
             <p id="event-type" class="eyebrow"></p>
             <h1 id="event-name"></h1>
             <p id="event-details" class="muted"></p>
+          </div>
+          <div class="event-heading-actions">
+            <span id="event-status" class="event-status"></span>
+            <button id="close-market-button" class="button button-primary" type="button">Finish / Close market</button>
+            <button id="refresh-market-total-button" class="button button-outline" type="button" hidden>Refresh sold total</button>
           </div>
         </section>
 
@@ -316,6 +322,45 @@
               <tbody id="inventory-table-body"></tbody>
             </table>
           </div>
+        </section>
+      </main>
+
+      <main id="market-history-page" class="dashboard page-view" hidden>
+        <div class="page-heading market-history-heading">
+          <div>
+            <p class="eyebrow">MARKETS</p>
+            <h1>Market history</h1>
+            <p class="muted">Income and items sold are linked to each market’s inventory records.</p>
+          </div>
+          <button id="market-inventory-button" class="button button-outline" type="button">Back to market inventory</button>
+        </div>
+        <section class="inventory-section market-history-section">
+          <div class="market-history-filters">
+            <label>
+              Year
+              <select id="market-history-year" aria-label="Filter markets by year"></select>
+            </label>
+            <p id="market-history-status" class="muted" role="status" hidden></p>
+          </div>
+          <div class="market-history-table-wrap">
+            <table class="market-history-table">
+              <thead>
+                <tr>
+                  <th scope="col">Period</th>
+                  <th scope="col">Number of days</th>
+                  <th scope="col">Location</th>
+                  <th scope="col">Organizer</th>
+                  <th scope="col">Edition</th>
+                  <th scope="col">Cash income</th>
+                  <th scope="col">Bank income</th>
+                  <th scope="col">Total income</th>
+                  <th scope="col">Total items sold</th>
+                </tr>
+              </thead>
+              <tbody id="market-history-table-body"></tbody>
+            </table>
+          </div>
+          <p id="market-history-empty" class="empty-state muted" hidden>No markets found for this year.</p>
         </section>
       </main>
 
@@ -529,6 +574,10 @@
           Location or platform <span class="optional-label">Optional</span>
           <input name="location" type="text" maxlength="120" placeholder="Venue, website, or platform">
         </label>
+        <div class="form-row">
+          <label>Organizer <span class="optional-label">Optional</span><input name="organizer" type="text" maxlength="120"></label>
+          <label>Edition <span class="optional-label">Optional</span><input name="edition" type="text" maxlength="80" placeholder="e.g. Christmas 2026"></label>
+        </div>
         <label class="checkbox-label">
           <input name="copyCatalog" type="checkbox">
           <span>Copy product catalog from previous event</span>
@@ -758,6 +807,10 @@
             Location or platform <span class="optional-label">Optional</span>
             <input name="location" type="text" maxlength="120">
           </label>
+          <div class="form-row">
+            <label>Organizer <span class="optional-label">Optional</span><input name="organizer" type="text" maxlength="120"></label>
+            <label>Edition <span class="optional-label">Optional</span><input name="edition" type="text" maxlength="80"></label>
+          </div>
           <p id="settings-form-error" class="form-error" role="alert" hidden></p>
           <div class="dialog-actions">
             <button id="delete-event-button" class="button button-danger" type="button">Delete selected event</button>
@@ -810,6 +863,10 @@
           Location or platform <span class="optional-label">Optional</span>
           <input id="import-event-location" type="text" maxlength="120">
         </label>
+        <div class="form-row">
+          <label>Organizer <span class="optional-label">Optional</span><input id="import-event-organizer" type="text" maxlength="120"></label>
+          <label>Edition <span class="optional-label">Optional</span><input id="import-event-edition" type="text" maxlength="80"></label>
+        </div>
         <label>
           Inventory CSV file
           <input id="import-csv-file" type="file" accept=".csv,text/csv">
@@ -820,6 +877,30 @@
           <button id="import-csv-button" class="button button-primary" type="button">Import market and products</button>
         </div>
       </section>
+    </dialog>
+
+    <dialog id="market-close-dialog" class="app-dialog">
+      <form id="market-close-form" class="dialog-content">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">MARKET SUMMARY</p>
+            <h2>Finish / Close market</h2>
+            <p id="market-close-name" class="muted"></p>
+          </div>
+          <button class="icon-button" data-close-dialog="market-close-dialog" type="button" aria-label="Close">×</button>
+        </div>
+        <p class="helper-text">The market inventory will become read-only. Sold items are totaled from the quantities marked sold in this market.</p>
+        <div class="form-row">
+          <label>Cash income (RON)<input name="cashIncome" type="number" min="0" step="0.01" inputmode="decimal" value="0" required></label>
+          <label>Bank income (RON)<input name="bankIncome" type="number" min="0" step="0.01" inputmode="decimal" value="0" required></label>
+        </div>
+        <p class="market-close-sold-count">Items sold: <strong id="market-close-sold-count">0</strong></p>
+        <p id="market-close-error" class="form-error" role="alert" hidden></p>
+        <div class="dialog-actions">
+          <button class="button button-quiet" data-close-dialog="market-close-dialog" type="button">Cancel</button>
+          <button id="confirm-market-close-button" class="button button-primary" type="submit">Close market</button>
+        </div>
+      </form>
     </dialog>
 
     <dialog id="account-dialog" class="app-dialog">

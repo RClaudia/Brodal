@@ -1,4 +1,4 @@
-const CACHE_NAME = "brodal-inventory-v23";
+const CACHE_NAME = "brodal-inventory-v24";
 const APP_SHELL = [
   "./",
   "./index.html",
