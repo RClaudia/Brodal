@@ -52,6 +52,8 @@
         <div class="topbar-actions">
           <span id="connection-status" class="connection-status" role="status">Connecting…</span>
           <span id="user-email" class="user-email"></span>
+          <button id="dashboard-page-button" class="button button-quiet" type="button">Markets</button>
+          <button id="items-page-button" class="button button-quiet" type="button">Items</button>
           <button id="settings-button" class="button button-quiet settings-button" type="button" aria-label="Settings">
             <span aria-hidden="true">⚙</span><span class="settings-label">Settings</span>
           </button>
@@ -59,13 +61,14 @@
         </div>
       </header>
 
-      <main class="dashboard">
+      <main id="dashboard-page" class="dashboard">
         <section class="event-toolbar" aria-label="Market selection">
           <div class="event-select-wrap">
-            <label for="event-select">Your market or shop update</label>
-            <select id="event-select" aria-label="Select a market or shop update">
-              <option value="">Loading events…</option>
-            </select>
+            <label id="event-select-label">Your market or shop update</label>
+            <button id="event-select-button" class="event-select-button" type="button" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="event-select-label event-select-value">
+              <span id="event-select-value">Loading events…</span><span class="event-select-caret" aria-hidden="true">⌄</span>
+            </button>
+            <div id="event-menu" class="event-menu" role="listbox" aria-labelledby="event-select-label" hidden></div>
           </div>
           <button id="new-event-button" class="button button-outline" type="button">＋ New Event</button>
         </section>
@@ -153,6 +156,76 @@
               <tbody id="inventory-table-body"></tbody>
             </table>
           </div>
+        </section>
+      </main>
+
+      <main id="items-page" class="dashboard page-view" hidden>
+        <div class="page-heading">
+          <div>
+            <p class="eyebrow">PRODUCT CATALOG</p>
+            <h1>Items</h1>
+            <p class="muted">Manage reusable products and prices for future markets. Saved market prices stay unchanged.</p>
+          </div>
+          <button id="add-catalog-item-button" class="button button-primary" type="button">＋ Add Item</button>
+        </div>
+        <section class="inventory-section">
+          <div class="filters catalog-filters">
+            <label class="search-wrap">
+              <span class="sr-only">Search items by SKU or name</span>
+              <span aria-hidden="true" class="search-icon">⌕</span>
+              <input id="catalog-search" type="search" placeholder="Search SKU or item name">
+            </label>
+            <select id="catalog-category-filter" aria-label="Filter catalog by category"></select>
+          </div>
+          <div id="catalog-empty-state" class="empty-state" hidden>
+            <span class="empty-art" aria-hidden="true">✿</span>
+            <h3>Your catalog is ready to grow</h3>
+            <p class="muted">Add products here once, then choose them for each market.</p>
+            <button id="catalog-empty-add-button" class="button button-primary" type="button">＋ Add Item</button>
+          </div>
+          <div id="catalog-loading" class="inline-loading" hidden><span class="spinner" aria-hidden="true"></span> Loading items…</div>
+          <div id="catalog-grid" class="catalog-grid"></div>
+        </section>
+      </main>
+
+      <main id="settings-page" class="dashboard page-view" hidden>
+        <div class="page-heading">
+          <div>
+            <p class="eyebrow">YOUR WORKSPACE</p>
+            <h1>Settings</h1>
+            <p class="muted">Choose what you would like to manage.</p>
+          </div>
+        </div>
+        <section class="settings-card-grid">
+          <button class="settings-action-card" data-settings-action="edit-event" type="button">
+            <span class="settings-action-icon" aria-hidden="true">✎</span>
+            <span><strong>Edit market</strong><small>Rename or update the selected market’s details.</small></span>
+            <span class="settings-action-arrow" aria-hidden="true">›</span>
+          </button>
+          <button class="settings-action-card" data-settings-action="add-event" type="button">
+            <span class="settings-action-icon" aria-hidden="true">＋</span>
+            <span><strong>Add market</strong><small>Create a market or shop update.</small></span>
+            <span class="settings-action-arrow" aria-hidden="true">›</span>
+          </button>
+          <button class="settings-action-card settings-action-danger" data-settings-action="remove-event" type="button">
+            <span class="settings-action-icon" aria-hidden="true">−</span>
+            <span><strong>Remove market</strong><small>Delete the selected market and its inventory.</small></span>
+            <span class="settings-action-arrow" aria-hidden="true">›</span>
+          </button>
+          <button class="settings-action-card" data-settings-action="categories" type="button">
+            <span class="settings-action-icon" aria-hidden="true">▦</span>
+            <span><strong>Categories</strong><small>Add or remove categories used by your items.</small></span>
+            <span class="settings-action-arrow" aria-hidden="true">›</span>
+          </button>
+          <button class="settings-action-card" data-settings-action="import-event" type="button">
+            <span class="settings-action-icon" aria-hidden="true">⇧</span>
+            <span><strong>Import market</strong><small>Import products and sales from an app CSV.</small></span>
+            <span class="settings-action-arrow" aria-hidden="true">›</span>
+          </button>
+          <article class="settings-info-card">
+            <span class="settings-action-icon" aria-hidden="true">ⓘ</span>
+            <span><strong>Currency & account</strong><small>Prices are shown in RON. Signed in as <span id="settings-page-email"></span>.</small></span>
+          </article>
         </section>
       </main>
 
@@ -279,6 +352,116 @@
       </form>
     </dialog>
 
+    <dialog id="product-picker-dialog" class="app-dialog">
+      <section class="dialog-content">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">ADD TO THIS MARKET</p>
+            <h2>Choose an item</h2>
+          </div>
+          <button class="icon-button" data-close-dialog="product-picker-dialog" type="button" aria-label="Close">×</button>
+        </div>
+        <div class="product-picker-filters">
+          <label>
+            Search by SKU or name
+            <input id="product-picker-search" type="search" placeholder="Type a SKU or item name">
+          </label>
+          <label>
+            Category
+            <select id="product-picker-category"></select>
+          </label>
+        </div>
+        <div id="product-picker-list" class="product-picker-list"></div>
+        <p id="product-picker-empty" class="muted picker-empty" hidden>No matching items. Add one from the Items page first.</p>
+        <div class="dialog-actions">
+          <button class="button button-outline" id="open-catalog-from-picker" type="button">Manage Items</button>
+        </div>
+      </section>
+    </dialog>
+
+    <dialog id="product-quantity-dialog" class="app-dialog">
+      <form id="product-quantity-form" class="dialog-content">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">MARKET STOCK</p>
+            <h2 id="selected-product-name">Add item to market</h2>
+            <p id="selected-product-details" class="muted"></p>
+          </div>
+          <button class="icon-button" data-close-dialog="product-quantity-dialog" type="button" aria-label="Close">×</button>
+        </div>
+        <label>
+          Quantity prepared
+          <input name="totalQty" type="number" min="0" step="1" value="0" required>
+        </label>
+        <label>
+          Notes <span class="optional-label">Optional</span>
+          <textarea name="notes" rows="2" maxlength="500"></textarea>
+        </label>
+        <p id="product-quantity-error" class="form-error" role="alert" hidden></p>
+        <div class="dialog-actions">
+          <button class="button button-quiet" data-close-dialog="product-quantity-dialog" type="button">Cancel</button>
+          <button class="button button-primary" type="submit">Add to market</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="catalog-item-dialog" class="app-dialog">
+      <form id="catalog-item-form" class="dialog-content">
+        <div class="dialog-heading">
+          <div>
+            <p id="catalog-item-eyebrow" class="eyebrow">PRODUCT CATALOG</p>
+            <h2 id="catalog-item-title">Add Item</h2>
+          </div>
+          <button class="icon-button" data-close-dialog="catalog-item-dialog" type="button" aria-label="Close">×</button>
+        </div>
+        <div class="photo-row">
+          <div id="catalog-image-preview" class="image-preview"><span>Image preview</span></div>
+          <label class="photo-picker">
+            Product photo <span class="optional-label">Optional</span>
+            <input id="catalog-image-input" type="file" accept="image/*">
+            <span class="helper-text">Compressed product image. Historical market photos remain unchanged.</span>
+          </label>
+        </div>
+        <div class="form-row">
+          <label>SKU<input name="sku" type="text" maxlength="50" required></label>
+          <label>Item name<input name="name" type="text" maxlength="100" required></label>
+        </div>
+        <div class="form-row">
+          <label>Category<select name="category" id="catalog-item-category" required></select></label>
+          <label>Price (RON)<input name="price" type="number" min="0" step="0.01" required></label>
+        </div>
+        <div class="form-row">
+          <label>Material cost (RON)<input name="unitCost" type="number" min="0" step="0.01" value="0"></label>
+          <label>Notes<input name="notes" type="text" maxlength="500"></label>
+        </div>
+        <p class="helper-text">Price changes saved here apply when you add this item to future markets. Existing market records keep their saved price.</p>
+        <p id="catalog-item-error" class="form-error" role="alert" hidden></p>
+        <div class="dialog-actions">
+          <button class="button button-quiet" data-close-dialog="catalog-item-dialog" type="button">Cancel</button>
+          <button id="save-catalog-item-button" class="button button-primary" type="submit">Save item</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="category-dialog" class="app-dialog">
+      <form id="category-form" class="dialog-content">
+        <div class="dialog-heading">
+          <div><p class="eyebrow">ITEM ORGANIZATION</p><h2>Categories</h2></div>
+          <button class="icon-button" data-close-dialog="category-dialog" type="button" aria-label="Close">×</button>
+        </div>
+        <label>
+          <span id="category-input-label">New category</span>
+          <input id="category-name-input" type="text" maxlength="40" placeholder="e.g. Cercei" required>
+        </label>
+        <p id="category-form-error" class="form-error" role="alert" hidden></p>
+        <div class="dialog-actions">
+          <button id="cancel-category-edit" class="button button-quiet" type="button" hidden>Cancel edit</button>
+          <button id="save-category-button" class="button button-primary" type="submit">Add category</button>
+        </div>
+        <div id="category-list" class="category-list"></div>
+      </form>
+    </dialog>
+
     <dialog id="settings-dialog" class="app-dialog">
       <form id="settings-form" class="dialog-content">
         <div class="dialog-heading">
@@ -332,47 +515,54 @@
           </div>
           <button id="settings-logout-button" class="button button-outline" type="button">Log out</button>
         </section>
-        <section class="settings-section import-section">
-          <div class="settings-section-heading">
-            <h3>Import a market from CSV</h3>
-            <p class="muted">Import a file exported from this app, including its products and sales counts.</p>
-          </div>
-          <label>
-            New market / event name
-            <input id="import-event-name" type="text" maxlength="100" placeholder="e.g. Spring Craft Fair">
-          </label>
-          <label>
-            Type
-            <select id="import-event-type">
-              <option>Market</option>
-              <option>Shop Update</option>
-            </select>
-          </label>
-          <div class="form-row">
-            <label>
-              Start date
-              <input id="import-event-start-date" type="date">
-            </label>
-            <label>
-              End date
-              <input id="import-event-end-date" type="date">
-            </label>
-          </div>
-          <label>
-            Location or platform <span class="optional-label">Optional</span>
-            <input id="import-event-location" type="text" maxlength="120">
-          </label>
-          <label>
-            Inventory CSV file
-            <input id="import-csv-file" type="file" accept=".csv,text/csv">
-          </label>
-          <p class="helper-text">The CSV should include SKU, Product Name, Category, Price, and Total Qty. Sold Qty, Unit Cost, and Notes are imported when present. Calculated columns and product photos are not imported.</p>
-          <p id="import-form-error" class="form-error" role="alert" hidden></p>
-          <div class="dialog-actions">
-            <button id="import-csv-button" class="button button-primary" type="button">Import market and products</button>
-          </div>
-        </section>
       </form>
+    </dialog>
+
+    <dialog id="import-dialog" class="app-dialog">
+      <section class="dialog-content">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">MARKET HISTORY</p>
+            <h2>Import a market from CSV</h2>
+          </div>
+          <button class="icon-button" data-close-dialog="import-dialog" type="button" aria-label="Close">×</button>
+        </div>
+        <p class="muted">Import a file exported from this app, including its products and sales counts.</p>
+        <label>
+          New market / event name
+          <input id="import-event-name" type="text" maxlength="100" placeholder="e.g. Spring Craft Fair">
+        </label>
+        <label>
+          Type
+          <select id="import-event-type">
+            <option>Market</option>
+            <option>Shop Update</option>
+          </select>
+        </label>
+        <div class="form-row">
+          <label>
+            Start date
+            <input id="import-event-start-date" type="date">
+          </label>
+          <label>
+            End date
+            <input id="import-event-end-date" type="date">
+          </label>
+        </div>
+        <label>
+          Location or platform <span class="optional-label">Optional</span>
+          <input id="import-event-location" type="text" maxlength="120">
+        </label>
+        <label>
+          Inventory CSV file
+          <input id="import-csv-file" type="file" accept=".csv,text/csv">
+        </label>
+        <p class="helper-text">The CSV should include SKU, Product Name, Category, Price, and Total Qty. Sold Qty, Unit Cost, and Notes are imported when present. Calculated columns and product photos are not imported.</p>
+        <p id="import-form-error" class="form-error" role="alert" hidden></p>
+        <div class="dialog-actions">
+          <button id="import-csv-button" class="button button-primary" type="button">Import market and products</button>
+        </div>
+      </section>
     </dialog>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>

@@ -26,11 +26,12 @@ service cloud.firestore {
       allow read: if isOwner();
       allow create, update: if isOwner()
         && request.resource.data.keys().hasOnly([
-          "marketId", "sku", "name", "category", "imageBase64", "price",
+          "marketId", "productId", "sku", "name", "category", "imageBase64", "price",
           "unitCost", "totalQty", "soldQty", "notes", "updatedAt"
         ])
         && request.resource.data.marketId is string
-        && exists(/databases/$(database)/documents/events/$(request.resource.data.marketId))
+        && (!("productId" in request.resource.data) || request.resource.data.productId is string)
+        && existsAfter(/databases/$(database)/documents/events/$(request.resource.data.marketId))
         && request.resource.data.sku is string
         && request.resource.data.name is string
         && request.resource.data.category is string
@@ -43,6 +44,51 @@ service cloud.firestore {
         && request.resource.data.soldQty <= request.resource.data.totalQty
         && request.resource.data.notes is string
         && request.resource.data.updatedAt == request.time;
+      allow delete: if isOwner();
+    }
+
+    match /products/{productId} {
+      allow read: if isOwner();
+      allow create: if isOwner()
+        && request.resource.data.keys().hasOnly([
+          "sku", "name", "category", "imageBase64", "price",
+          "unitCost", "notes", "createdAt", "updatedAt"
+        ])
+        && request.resource.data.sku is string
+        && request.resource.data.name is string
+        && request.resource.data.category is string
+        && request.resource.data.imageBase64 is string
+        && request.resource.data.price is number
+        && request.resource.data.unitCost is number
+        && request.resource.data.notes is string
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isOwner()
+        && request.resource.data.keys().hasOnly([
+          "sku", "name", "category", "imageBase64", "price",
+          "unitCost", "notes", "createdAt", "updatedAt"
+        ])
+        && request.resource.data.sku is string
+        && request.resource.data.name is string
+        && request.resource.data.category is string
+        && request.resource.data.imageBase64 is string
+        && request.resource.data.price is number
+        && request.resource.data.unitCost is number
+        && request.resource.data.notes is string
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if isOwner();
+    }
+
+    match /categories/{categoryId} {
+      allow read: if isOwner();
+      allow create: if isOwner()
+        && request.resource.data.keys().hasOnly(["name", "createdAt"])
+        && request.resource.data.name is string
+        && request.resource.data.createdAt == request.time;
+      allow update: if isOwner()
+        && request.resource.data.keys().hasOnly(["name", "createdAt"])
+        && request.resource.data.name is string
+        && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if isOwner();
     }
   }
