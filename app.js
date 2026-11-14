@@ -65,6 +65,7 @@ const catalogItemDialog = $("#catalog-item-dialog");
 const categoryDialog = $("#category-dialog");
 const settingsDialog = $("#settings-dialog");
 const importDialog = $("#import-dialog");
+const accountDialog = $("#account-dialog");
 const inventoryForm = $("#inventory-form");
 const eventForm = $("#event-form");
 const settingsForm = $("#settings-form");
@@ -155,7 +156,10 @@ function renderEvents() {
       <span class="event-menu-meta">${escapeHtml(event.type)} · ${escapeHtml(eventDateRange(event))}</span>
     </button>
   `).join("");
-  $("#event-menu").hidden = state.events.length === 0;
+  if (state.events.length === 0) {
+    $("#event-menu").hidden = true;
+    $("#event-select-button").setAttribute("aria-expanded", "false");
+  }
   $("#add-inventory-button").disabled = !state.activeEventId;
   $("#mobile-add-button").disabled = !state.activeEventId;
   renderActiveEvent();
@@ -1626,6 +1630,19 @@ function initializeAppUi() {
     if (settingsAction === "import-event") {
       openImportDialog();
     }
+    if (settingsAction === "account") {
+      $("#account-dialog-email").textContent = state.user?.email ?? "";
+      accountDialog.showModal();
+    }
+  });
+  $("#account-dialog-logout").addEventListener("click", async () => {
+    try {
+      await signOut(auth);
+      accountDialog.close();
+    } catch (error) {
+      console.error("Sign-out failed.", error);
+      toast(`Could not log out: ${error.message}`, true);
+    }
   });
   $("#event-select-button").addEventListener("click", () => {
     const menu = $("#event-menu");
@@ -1777,7 +1794,7 @@ function initializeAppUi() {
   document.querySelectorAll("[data-close-dialog]").forEach((button) => {
     button.addEventListener("click", () => document.getElementById(button.dataset.closeDialog).close());
   });
-  [eventDialog, inventoryDialog, settingsDialog, importDialog, productPickerDialog, productQuantityDialog, catalogItemDialog, categoryDialog].forEach((dialog) => {
+  [eventDialog, inventoryDialog, settingsDialog, importDialog, accountDialog, productPickerDialog, productQuantityDialog, catalogItemDialog, categoryDialog].forEach((dialog) => {
     dialog.addEventListener("click", (event) => {
       if (event.target === dialog) dialog.close();
     });

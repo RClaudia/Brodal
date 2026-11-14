@@ -222,10 +222,11 @@
             <span><strong>Import market</strong><small>Import products and sales from an app CSV.</small></span>
             <span class="settings-action-arrow" aria-hidden="true">›</span>
           </button>
-          <article class="settings-info-card">
+          <button class="settings-action-card" data-settings-action="account" type="button">
             <span class="settings-action-icon" aria-hidden="true">ⓘ</span>
             <span><strong>Currency & account</strong><small>Prices are shown in RON. Signed in as <span id="settings-page-email"></span>.</small></span>
-          </article>
+            <span class="settings-action-arrow" aria-hidden="true">›</span>
+          </button>
         </section>
       </main>
 
@@ -561,6 +562,31 @@
         <p id="import-form-error" class="form-error" role="alert" hidden></p>
         <div class="dialog-actions">
           <button id="import-csv-button" class="button button-primary" type="button">Import market and products</button>
+        </div>
+      </section>
+    </dialog>
+
+    <dialog id="account-dialog" class="app-dialog">
+      <section class="dialog-content">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">YOUR WORKSPACE</p>
+            <h2>Currency & account</h2>
+          </div>
+          <button class="icon-button" data-close-dialog="account-dialog" type="button" aria-label="Close">×</button>
+        </div>
+        <div class="account-detail">
+          <span class="muted">Currency</span>
+          <strong>RON</strong>
+          <p class="helper-text">All product and market prices are shown in Romanian lei.</p>
+        </div>
+        <div class="account-detail">
+          <span class="muted">Signed in as</span>
+          <strong id="account-dialog-email"></strong>
+        </div>
+        <div class="dialog-actions">
+          <button id="account-dialog-logout" class="button button-outline" type="button">Log out</button>
+          <button class="button button-primary" data-close-dialog="account-dialog" type="button">Done</button>
         </div>
       </section>
     </dialog>
