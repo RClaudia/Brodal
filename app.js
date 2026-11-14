@@ -665,12 +665,14 @@ function renderMaterials() {
   $("#materials-mobile-list").innerHTML = filtered.map((material) => {
     const remaining = Math.max(0, numberValue(material.quantity) - numberValue(material.usedQuantity));
     const unit = String(material.unit ?? "pcs");
+    const totalPrice = numberValue(material.price) * numberValue(material.quantity);
     return `<article class="materials-mobile-card">
       <div class="materials-mobile-card-heading">
         <div><h2>${escapeHtml(material.name)}</h2><p>${escapeHtml(material.distributor || "No distributor")}</p></div>
         <strong>${money.format(numberValue(material.price))}<small> / ${escapeHtml(unit)}</small></strong>
       </div>
       <div class="materials-mobile-quantities">
+        <span>Total price <strong>${money.format(totalPrice)}</strong></span>
         <span>Quantity <strong>${materialQuantity(material.quantity, unit)} ${escapeHtml(unit)}</strong></span>
         <span>Used ${materialQuantityControl(material)}</span>
         <span>Remaining <strong>${materialQuantity(remaining, unit)} ${escapeHtml(unit)}</strong></span>
@@ -681,10 +683,12 @@ function renderMaterials() {
   $("#materials-table-body").innerHTML = filtered.map((material) => {
     const remaining = Math.max(0, numberValue(material.quantity) - numberValue(material.usedQuantity));
     const unit = String(material.unit ?? "pcs");
+    const totalPrice = numberValue(material.price) * numberValue(material.quantity);
     return `<tr>
       <td>${escapeHtml(material.name)}</td>
       <td>${escapeHtml(material.distributor || "—")}</td>
       <td>${money.format(numberValue(material.price))} / ${escapeHtml(unit)}</td>
+      <td>${money.format(totalPrice)}</td>
       <td>${materialQuantity(material.quantity, unit)} ${escapeHtml(unit)}</td>
       <td>${materialQuantityControl(material)}</td>
       <td>${materialQuantity(remaining, unit)} ${escapeHtml(unit)}</td>
