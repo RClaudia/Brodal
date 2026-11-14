@@ -35,6 +35,11 @@ const state = {
   marketHistoryLoading: false,
   marketHistoryError: "",
   inventory: [],
+  materials: [],
+  materialsUnsubscribe: null,
+  materialsLoading: false,
+  materialsSearch: "",
+  editingMaterialId: null,
   selectedCategory: "All",
   search: "",
   sortBy: "sku",
@@ -75,6 +80,7 @@ const state = {
 const loginScreen = $("#login-screen");
 const appShell = $("#app-shell");
 const eventDialog = $("#event-dialog");
+const materialDialog = $("#material-dialog");
 const marketCloseDialog = $("#market-close-dialog");
 const pastMarketDialog = $("#past-market-dialog");
 const inventoryDialog = $("#inventory-dialog");
@@ -87,6 +93,7 @@ const importDialog = $("#import-dialog");
 const accountDialog = $("#account-dialog");
 const accountingDialog = $("#accounting-dialog");
 const inventoryForm = $("#inventory-form");
+const materialForm = $("#material-form");
 const eventForm = $("#event-form");
 const settingsForm = $("#settings-form");
 const accountingForm = $("#accounting-form");
@@ -618,6 +625,199 @@ function renderCategoryList() {
   }).join("");
 }
 
+function materialQuantity(value, unit) {
+  const maximumFractionDigits = unit === "pcs" ? 0 : 2;
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits }).format(numberValue(value));
+}
+
+function materialQuantityControl(material) {
+  const used = numberValue(material.usedQuantity);
+  const quantity = numberValue(material.quantity);
+  return `<span class="material-used-control">
+    <button class="stepper-button" type="button" data-material-action="used-minus" data-id="${escapeHtml(material.id)}" aria-label="Decrease used quantity for ${escapeHtml(material.name)}" ${used <= 0 ? "disabled" : ""}>−</button>
+    <strong>${materialQuantity(used, material.unit)}</strong>
+    <button class="stepper-button" type="button" data-material-action="used-plus" data-id="${escapeHtml(material.id)}" aria-label="Increase used quantity for ${escapeHtml(material.name)}" ${used >= quantity ? "disabled" : ""}>+</button>
+  </span>`;
+}
+
+function materialActions(material) {
+  return `<span class="row-actions">
+    <button class="text-button" type="button" data-material-action="edit" data-id="${escapeHtml(material.id)}">Edit</button>
+    <button class="text-button danger" type="button" data-material-action="delete" data-id="${escapeHtml(material.id)}">Delete</button>
+  </span>`;
+}
+
+function renderMaterials() {
+  const search = state.materialsSearch.trim().toLocaleLowerCase();
+  const filtered = state.materials.filter((material) =>
+    !search
+    || String(material.name ?? "").toLocaleLowerCase().includes(search)
+    || String(material.distributor ?? "").toLocaleLowerCase().includes(search)
+  ).sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? ""), undefined, { sensitivity: "base" }));
+  $("#materials-loading").hidden = !state.materialsLoading;
+  $("#materials-empty").hidden = state.materialsLoading || filtered.length > 0;
+  $("#materials-empty-title").textContent = state.materials.length ? "No matching materials" : "Your materials list starts here";
+  $("#materials-empty-description").textContent = state.materials.length
+    ? "Try another material name or distributor."
+    : "Add materials to keep their quantities and usage together.";
+  $("#materials-empty-add-button").hidden = state.materials.length > 0;
+  $(".materials-table-wrap").hidden = state.materialsLoading || filtered.length === 0;
+  $("#materials-mobile-list").innerHTML = filtered.map((material) => {
+    const remaining = Math.max(0, numberValue(material.quantity) - numberValue(material.usedQuantity));
+    const unit = String(material.unit ?? "pcs");
+    return `<article class="materials-mobile-card">
+      <div class="materials-mobile-card-heading">
+        <div><h2>${escapeHtml(material.name)}</h2><p>${escapeHtml(material.distributor || "No distributor")}</p></div>
+        <strong>${money.format(numberValue(material.price))}<small> / ${escapeHtml(unit)}</small></strong>
+      </div>
+      <div class="materials-mobile-quantities">
+        <span>Quantity <strong>${materialQuantity(material.quantity, unit)} ${escapeHtml(unit)}</strong></span>
+        <span>Used ${materialQuantityControl(material)}</span>
+        <span>Remaining <strong>${materialQuantity(remaining, unit)} ${escapeHtml(unit)}</strong></span>
+      </div>
+      <div class="materials-mobile-actions">${materialActions(material)}</div>
+    </article>`;
+  }).join("");
+  $("#materials-table-body").innerHTML = filtered.map((material) => {
+    const remaining = Math.max(0, numberValue(material.quantity) - numberValue(material.usedQuantity));
+    const unit = String(material.unit ?? "pcs");
+    return `<tr>
+      <td>${escapeHtml(material.name)}</td>
+      <td>${escapeHtml(material.distributor || "—")}</td>
+      <td>${money.format(numberValue(material.price))} / ${escapeHtml(unit)}</td>
+      <td>${materialQuantity(material.quantity, unit)} ${escapeHtml(unit)}</td>
+      <td>${materialQuantityControl(material)}</td>
+      <td>${materialQuantity(remaining, unit)} ${escapeHtml(unit)}</td>
+      <td>${materialActions(material)}</td>
+    </tr>`;
+  }).join("");
+}
+
+function subscribeToMaterials() {
+  state.materialsUnsubscribe?.();
+  state.materialsLoading = true;
+  renderMaterials();
+  state.materialsUnsubscribe = onSnapshot(collection(db, "materials"), (snapshot) => {
+    state.materials = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+    state.materialsLoading = false;
+    renderMaterials();
+  }, (error) => {
+    state.materialsLoading = false;
+    renderMaterials();
+    console.error("Could not load materials.", error);
+    toast(`Could not load materials: ${error.message}`, true);
+  });
+}
+
+function openMaterialDialog(material = null) {
+  state.editingMaterialId = material?.id ?? null;
+  materialForm.reset();
+  const step = material?.unit === "pcs" || !material ? "1" : "0.01";
+  materialForm.elements.quantity.step = step;
+  materialForm.elements.usedQuantity.step = step;
+  materialForm.elements.name.value = material?.name ?? "";
+  materialForm.elements.distributor.value = material?.distributor ?? "";
+  materialForm.elements.price.value = material ? numberValue(material.price) : 0;
+  materialForm.elements.unit.value = material?.unit ?? "pcs";
+  materialForm.elements.quantity.value = material ? numberValue(material.quantity) : 0;
+  materialForm.elements.usedQuantity.value = material ? numberValue(material.usedQuantity) : 0;
+  $("#material-form-title").textContent = material ? "Edit material" : "Add material";
+  $("#save-material-button").textContent = material ? "Save changes" : "Save material";
+  clearError($("#material-form-error"));
+  materialDialog.showModal();
+}
+
+async function handleMaterialSubmit(event) {
+  event.preventDefault();
+  const button = $("#save-material-button");
+  const errorElement = $("#material-form-error");
+  clearError(errorElement);
+  button.disabled = true;
+  try {
+    const values = new FormData(materialForm);
+    const name = String(values.get("name")).trim();
+    const distributor = String(values.get("distributor")).trim();
+    const unit = String(values.get("unit"));
+    const price = Number(values.get("price"));
+    const quantity = Number(values.get("quantity"));
+    const usedQuantity = Number(values.get("usedQuantity"));
+    if (!name) throw new Error("Enter a material name.");
+    if (!["pcs", "m", "cm"].includes(unit)) throw new Error("Choose a valid material unit.");
+    if (![price, quantity, usedQuantity].every(Number.isFinite) || price < 0 || quantity < 0 || usedQuantity < 0) {
+      throw new Error("Price and quantities must be valid non-negative numbers.");
+    }
+    if (unit === "pcs" && (![quantity, usedQuantity].every(Number.isInteger))) {
+      throw new Error("Pieces must be entered as whole numbers.");
+    }
+    if (usedQuantity > quantity) throw new Error("Used quantity cannot be greater than the total quantity.");
+    const payload = {
+      name,
+      distributor,
+      price,
+      unit,
+      quantity,
+      usedQuantity,
+      updatedAt: serverTimestamp()
+    };
+    if (state.editingMaterialId) {
+      await updateDoc(doc(db, "materials", state.editingMaterialId), payload);
+    } else {
+      await addDoc(collection(db, "materials"), { ...payload, createdAt: serverTimestamp() });
+    }
+    materialDialog.close();
+    toast(state.editingMaterialId ? "Material updated." : "Material added.");
+  } catch (error) {
+    console.error("Could not save material.", error);
+    showError(errorElement, error.message);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function changeMaterialUsedQuantity(id, direction) {
+  const material = state.materials.find((item) => item.id === id);
+  if (!material) return;
+  const quantity = numberValue(material.quantity);
+  const used = numberValue(material.usedQuantity);
+  const step = material.unit === "pcs" ? 1 : 0.1;
+  const nextUsed = direction > 0
+    ? Math.min(quantity, Math.round((used + step) * 100) / 100)
+    : Math.max(0, Math.round((used - step) * 100) / 100);
+  if (nextUsed === used) return;
+  try {
+    await updateDoc(doc(db, "materials", id), {
+      usedQuantity: nextUsed,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.error("Could not update material used quantity.", error);
+    toast(`Could not update used quantity: ${error.message}`, true);
+  }
+}
+
+async function deleteMaterial(id) {
+  const material = state.materials.find((item) => item.id === id);
+  if (!material || !window.confirm(`Delete material "${material.name}"? This cannot be undone.`)) return;
+  try {
+    await deleteDoc(doc(db, "materials", id));
+    toast("Material deleted.");
+  } catch (error) {
+    console.error("Could not delete material.", error);
+    toast(`Could not delete material: ${error.message}`, true);
+  }
+}
+
+function onMaterialAction(event) {
+  const button = event.target.closest("[data-material-action]");
+  if (!button) return;
+  const { materialAction, id } = button.dataset;
+  const material = state.materials.find((item) => item.id === id);
+  if (materialAction === "edit" && material) openMaterialDialog(material);
+  if (materialAction === "delete") void deleteMaterial(id);
+  if (materialAction === "used-plus") void changeMaterialUsedQuantity(id, 1);
+  if (materialAction === "used-minus") void changeMaterialUsedQuantity(id, -1);
+}
+
 function showPage(name) {
   state.currentPage = name;
   state.currentModule = name === "hub" ? "hub" : name === "accounting" ? "accounting" : "inventory";
@@ -626,6 +826,7 @@ function showPage(name) {
   $("#accounting-page").hidden = name !== "accounting";
   $("#dashboard-page").hidden = name !== "dashboard";
   $("#market-history-page").hidden = name !== "market-history";
+  $("#materials-page").hidden = name !== "materials";
   $("#items-page").hidden = name !== "items";
   $("#settings-page").hidden = name !== "settings";
   $(".mobile-action-bar").hidden = name !== "dashboard";
@@ -634,6 +835,7 @@ function showPage(name) {
   if (name === "items") renderCatalog();
   if (name === "accounting") renderAccounting();
   if (name === "market-history") void loadMarketHistoryInventoryTotals();
+  if (name === "materials") renderMaterials();
 }
 
 function populatePastMarketYears() {
@@ -2578,6 +2780,21 @@ function initializeAppUi() {
   });
   $("#inventory-home-page").addEventListener("click", (event) => {
     if (event.target.closest('[data-inventory-page="markets"]')) showPage("dashboard");
+    if (event.target.closest('[data-inventory-page="materials"]')) showPage("materials");
+  });
+  $("#add-material-button").addEventListener("click", () => openMaterialDialog());
+  $("#materials-empty-add-button").addEventListener("click", () => openMaterialDialog());
+  $("#materials-search").addEventListener("input", (event) => {
+    state.materialsSearch = event.currentTarget.value;
+    renderMaterials();
+  });
+  $("#materials-mobile-list").addEventListener("click", onMaterialAction);
+  $("#materials-table-body").addEventListener("click", onMaterialAction);
+  materialForm.addEventListener("submit", handleMaterialSubmit);
+  materialForm.elements.unit.addEventListener("change", (event) => {
+    const step = event.currentTarget.value === "pcs" ? "1" : "0.01";
+    materialForm.elements.quantity.step = step;
+    materialForm.elements.usedQuantity.step = step;
   });
   $("#market-history-button").addEventListener("click", () => showPage("market-history"));
   $("#market-inventory-button").addEventListener("click", () => showPage("dashboard"));
@@ -2845,7 +3062,7 @@ function initializeAppUi() {
   document.querySelectorAll("[data-close-dialog]").forEach((button) => {
     button.addEventListener("click", () => document.getElementById(button.dataset.closeDialog).close());
   });
-  [eventDialog, inventoryDialog, settingsDialog, importDialog, accountDialog, accountingDialog, productPickerDialog, productQuantityDialog, catalogItemDialog, categoryDialog, marketCloseDialog, pastMarketDialog].forEach((dialog) => {
+  [eventDialog, materialDialog, inventoryDialog, settingsDialog, importDialog, accountDialog, accountingDialog, productPickerDialog, productQuantityDialog, catalogItemDialog, categoryDialog, marketCloseDialog, pastMarketDialog].forEach((dialog) => {
     dialog.addEventListener("click", (event) => {
       if (event.target === dialog) dialog.close();
     });
@@ -2868,16 +3085,19 @@ if (!isFirebaseConfigured) {
       showPage("hub");
       setScreen("app");
       startCatalogListeners();
+      subscribeToMaterials();
       subscribeToEvents();
       subscribeToAccountingEntries();
     } else {
       state.inventoryUnsubscribe?.();
       state.catalogUnsubscribe?.();
       state.categoriesUnsubscribe?.();
+      state.materialsUnsubscribe?.();
       state.accountingUnsubscribe?.();
       state.events = [];
       state.inventory = [];
       state.catalog = [];
+      state.materials = [];
       state.categoryRecords = [];
       state.accountingEntries = [];
       state.accountingLoading = false;

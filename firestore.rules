@@ -97,6 +97,47 @@ service cloud.firestore {
       allow delete: if isOwner();
     }
 
+    match /materials/{materialId} {
+      allow read: if isOwner();
+      allow create: if isOwner()
+        && request.resource.data.keys().hasOnly([
+          "name", "distributor", "price", "unit", "quantity", "usedQuantity", "createdAt", "updatedAt"
+        ])
+        && request.resource.data.name is string
+        && request.resource.data.distributor is string
+        && request.resource.data.price is number
+        && request.resource.data.price >= 0
+        && request.resource.data.unit in ["pcs", "m", "cm"]
+        && request.resource.data.quantity is number
+        && request.resource.data.quantity >= 0
+        && (request.resource.data.unit != "pcs" || request.resource.data.quantity is int)
+        && request.resource.data.usedQuantity is number
+        && request.resource.data.usedQuantity >= 0
+        && request.resource.data.usedQuantity <= request.resource.data.quantity
+        && (request.resource.data.unit != "pcs" || request.resource.data.usedQuantity is int)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isOwner()
+        && request.resource.data.keys().hasOnly([
+          "name", "distributor", "price", "unit", "quantity", "usedQuantity", "createdAt", "updatedAt"
+        ])
+        && request.resource.data.name is string
+        && request.resource.data.distributor is string
+        && request.resource.data.price is number
+        && request.resource.data.price >= 0
+        && request.resource.data.unit in ["pcs", "m", "cm"]
+        && request.resource.data.quantity is number
+        && request.resource.data.quantity >= 0
+        && (request.resource.data.unit != "pcs" || request.resource.data.quantity is int)
+        && request.resource.data.usedQuantity is number
+        && request.resource.data.usedQuantity >= 0
+        && request.resource.data.usedQuantity <= request.resource.data.quantity
+        && (request.resource.data.unit != "pcs" || request.resource.data.usedQuantity is int)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if isOwner();
+    }
+
     match /products/{productId} {
       allow read: if isOwner();
       allow create: if isOwner()

@@ -354,6 +354,27 @@ button.workspace-card:hover { transform: translateY(-2px); border-color: #b7d5e1
 .market-history-table .market-history-total-row th { text-align: right; }
 .market-close-sold-count { margin: 0; padding: 12px; border-radius: 10px; background: var(--blue-pale); color: var(--ink); }
 .market-close-sold-count strong { margin-left: 5px; }
+.materials-filters { margin-bottom: 16px; }
+.materials-filters .search-wrap { max-width: 440px; }
+.materials-table-wrap { width: 100%; overflow-x: auto; }
+.materials-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.materials-table th, .materials-table td { padding: 11px 9px; border-bottom: 1px solid #e8eff2; text-align: left; vertical-align: middle; }
+.materials-table thead th { background: #f4fafc; color: #476571; font-size: 0.72rem; font-weight: 750; white-space: nowrap; }
+.materials-table tbody tr:hover { background: #f9fcfd; }
+.materials-used-control { display: inline-flex; align-items: center; gap: 7px; }
+.materials-used-control strong { min-width: 34px; text-align: center; font-variant-numeric: tabular-nums; }
+.materials-used-control .stepper-button { width: 30px; height: 30px; border-radius: 8px; }
+.materials-mobile-list { display: none; }
+.materials-mobile-card { display: grid; gap: 12px; padding: 14px; border: 1px solid #e2edf1; border-radius: 13px; background: #fff; }
+.materials-mobile-card-heading { display: flex; justify-content: space-between; gap: 12px; }
+.materials-mobile-card-heading h2 { margin: 0 0 4px; font-size: 0.96rem; }
+.materials-mobile-card-heading p { margin: 0; color: var(--muted); font-size: 0.75rem; }
+.materials-mobile-card-heading > strong { flex: 0 0 auto; font-size: 0.86rem; text-align: right; }
+.materials-mobile-card-heading > strong small { color: var(--muted); font-size: 0.7rem; }
+.materials-mobile-quantities { display: grid; gap: 8px; padding: 10px 0; border-top: 1px solid #eef3f5; border-bottom: 1px solid #eef3f5; }
+.materials-mobile-quantities > span { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 0.75rem; }
+.materials-mobile-quantities > span > strong { color: var(--ink); font-size: 0.8rem; }
+.materials-mobile-actions { display: flex; justify-content: flex-end; }
 .accounting-row-actions { display: flex; gap: 6px; }
 .accounting-row-actions .text-button { padding: 4px; }
 .accounting-mobile-list { display: none; }
@@ -528,6 +549,10 @@ button.workspace-card:hover { transform: translateY(-2px); border-color: #b7d5e1
   .market-history-heading .button { max-width: 140px; white-space: normal; }
   .market-history-filters { align-items: stretch; flex-direction: column; gap: 8px; }
   .market-history-filters label { width: 100%; }
+  .materials-filters .search-wrap { max-width: none; }
+  .materials-table-wrap { display: none; }
+  .materials-mobile-list { display: grid; gap: 10px; }
+  .materials-used-control .stepper-button { width: 36px; height: 36px; }
   .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin-bottom: 17px; }
   .summary-card { min-height: 100px; padding: 12px; border-radius: 12px; }
   .summary-card strong { margin: 5px 0 2px; font-size: 1.3rem; }

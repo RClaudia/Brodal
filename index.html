@@ -115,7 +115,7 @@
         <section class="workspace-welcome">
           <p class="eyebrow">INVENTORY</p>
           <h1>Choose an inventory</h1>
-          <p class="muted">Manage market stock now, with room for materials and other inventory later.</p>
+          <p class="muted">Market stock and materials are managed separately.</p>
         </section>
         <section class="workspace-grid" aria-label="Inventory sections">
           <button class="workspace-card" type="button" data-inventory-page="markets">
@@ -126,12 +126,64 @@
             </span>
             <span class="workspace-arrow" aria-hidden="true">›</span>
           </button>
+          <button class="workspace-card workspace-card-materials" type="button" data-inventory-page="materials">
+            <span class="workspace-icon" aria-hidden="true">▧</span>
+            <span class="workspace-card-copy">
+              <strong>Materials</strong>
+              <small>Track material stock, price, and manually recorded usage.</small>
+            </span>
+            <span class="workspace-arrow" aria-hidden="true">›</span>
+          </button>
           <div class="workspace-card workspace-card-placeholder" aria-disabled="true">
             <span class="workspace-icon" aria-hidden="true">＋</span>
             <span class="workspace-card-copy">
-              <strong>Materials and other inventory</strong>
-              <small>Additional inventory sections can be added here later.</small>
+              <strong>Other inventory</strong>
+              <small>Additional independent inventory sections can be added here later.</small>
             </span>
+          </div>
+        </section>
+      </main>
+
+      <main id="materials-page" class="dashboard page-view" hidden>
+        <div class="page-heading materials-heading">
+          <div>
+            <p class="eyebrow">INVENTORY</p>
+            <h1>Materials</h1>
+            <p class="muted">Track material quantities and adjust used amounts manually. Remaining quantity is calculated.</p>
+          </div>
+          <button id="add-material-button" class="button button-primary" type="button">＋ Add material</button>
+        </div>
+        <section class="inventory-section materials-section">
+          <div class="filters materials-filters">
+            <label class="search-wrap">
+              <span class="sr-only">Search materials or distributors</span>
+              <span aria-hidden="true" class="search-icon">⌕</span>
+              <input id="materials-search" type="search" placeholder="Search materials or distributors">
+            </label>
+          </div>
+          <div id="materials-loading" class="inline-loading" hidden><span class="spinner" aria-hidden="true"></span> Loading materials…</div>
+          <div id="materials-empty" class="empty-state" hidden>
+            <span class="empty-art" aria-hidden="true">✿</span>
+            <h3 id="materials-empty-title">Your materials list starts here</h3>
+            <p id="materials-empty-description" class="muted">Add materials to keep their quantities and usage together.</p>
+            <button id="materials-empty-add-button" class="button button-primary" type="button">＋ Add material</button>
+          </div>
+          <div id="materials-mobile-list" class="materials-mobile-list"></div>
+          <div class="materials-table-wrap">
+            <table class="materials-table">
+              <thead>
+                <tr>
+                  <th scope="col">Material name</th>
+                  <th scope="col">Distributor</th>
+                  <th scope="col">Price per unit</th>
+                  <th scope="col">Quantity</th>
+                  <th scope="col">Used quantity</th>
+                  <th scope="col">Remaining</th>
+                  <th scope="col">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="materials-table-body"></tbody>
+            </table>
           </div>
         </section>
       </main>
@@ -909,6 +961,39 @@
         <div class="dialog-actions">
           <button class="button button-quiet" data-close-dialog="market-close-dialog" type="button">Cancel</button>
           <button id="confirm-market-close-button" class="button button-primary" type="submit">Close market</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="material-dialog" class="app-dialog">
+      <form id="material-form" class="dialog-content">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">MATERIALS INVENTORY</p>
+            <h2 id="material-form-title">Add material</h2>
+          </div>
+          <button class="icon-button" data-close-dialog="material-dialog" type="button" aria-label="Close">×</button>
+        </div>
+        <label>Material name<input name="name" type="text" maxlength="120" required></label>
+        <label>Distributor<input name="distributor" type="text" maxlength="120" placeholder="Optional"></label>
+        <div class="form-row">
+          <label>Price per unit (RON)<input name="price" type="number" min="0" step="0.01" inputmode="decimal" value="0" required></label>
+          <label>Unit
+            <select name="unit" required>
+              <option value="pcs">Pieces</option>
+              <option value="m">Meters (m)</option>
+              <option value="cm">Centimeters (cm)</option>
+            </select>
+          </label>
+        </div>
+        <div class="form-row">
+          <label>Quantity<input name="quantity" type="number" min="0" step="0.01" inputmode="decimal" value="0" required></label>
+          <label>Used quantity<input name="usedQuantity" type="number" min="0" step="0.01" inputmode="decimal" value="0" required></label>
+        </div>
+        <p id="material-form-error" class="form-error" role="alert" hidden></p>
+        <div class="dialog-actions">
+          <button class="button button-quiet" data-close-dialog="material-dialog" type="button">Cancel</button>
+          <button id="save-material-button" class="button button-primary" type="submit">Save material</button>
         </div>
       </form>
     </dialog>
