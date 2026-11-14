@@ -52,6 +52,7 @@ const state = {
   currentPage: "dashboard",
   currentModule: "hub",
   catalogMigrationStarted: false,
+  catalogQuantityMigrationStarted: false,
   toastTimer: null,
   inventoryLoading: false,
   accountingEntries: [],
@@ -187,6 +188,43 @@ function renderActiveEvent() {
   $("#event-details").textContent = [eventDateRange(event), event.location].filter(Boolean).join(" · ");
 }
 
+async function migrateCatalogVariantQuantities(products) {
+  if (state.catalogQuantityMigrationStarted || !navigator.onLine) return;
+  state.catalogQuantityMigrationStarted = true;
+
+  const missingQuantities = products.filter((product) => {
+    const data = product.data();
+    return !Array.isArray(data.variants)
+      || !data.variants.length
+      || data.variants.some((variant) => !Object.prototype.hasOwnProperty.call(variant, "quantity")
+        || variant.quantity == null);
+  });
+  if (!missingQuantities.length) return;
+
+  try {
+    for (const product of missingQuantities) {
+      const data = product.data();
+      const variants = Array.isArray(data.variants) && data.variants.length
+        ? data.variants.map((variant) => ({
+          ...variant,
+          quantity: variant.quantity == null ? 0 : variant.quantity
+        }))
+        : [{
+          id: "default",
+          color: String(data.color ?? "Standard"),
+          imageBase64: String(data.imageBase64 ?? ""),
+          quantity: 0
+        }];
+      await updateDoc(product.ref, { variants, updatedAt: serverTimestamp() });
+    }
+    toast(`Initialized catalog quantity to 0 for ${missingQuantities.length} item(s). Enter actual stock in Items.`);
+  } catch (error) {
+    state.catalogQuantityMigrationStarted = false;
+    console.error("Could not initialize missing catalog variant quantities.", error);
+    toast(`Could not initialize item quantities: ${error.message}. Check that the latest Firestore rules are published.`, true);
+  }
+}
+
 function subscribeToEvents() {
   onSnapshot(
     query(collection(db, "events")),
@@ -209,6 +247,7 @@ function startCatalogListeners() {
       .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? ""), undefined, { sensitivity: "base" }));
     renderCatalog();
     renderProductPicker();
+    void migrateCatalogVariantQuantities(snapshot.docs);
     if (!state.catalogMigrationStarted) {
       state.catalogMigrationStarted = true;
       void migrateInventoryToCatalog();
@@ -296,6 +335,12 @@ async function migrateInventoryToCatalog() {
           price: numberValue(product.price),
           unitCost: numberValue(product.unitCost),
           notes: product.notes ?? "",
+          variants: [{
+            id: "default",
+            color: String(product.color ?? "Standard"),
+            imageBase64: String(product.imageBase64 ?? ""),
+            quantity: 0
+          }],
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });
@@ -368,7 +413,14 @@ function renderCatalog() {
         <div class="catalog-variant-list">${catalogVariants(product).map((variant) => `
           <div class="catalog-variant-summary">
             <span class="product-thumb">${imageMarkup({ imageBase64: variant.imageBase64 })}</span>
-            <span><strong>${escapeHtml(variant.color)}</strong><small>Catalog quantity: ${numberValue(variant.quantity)}</small></span>
+            <span class="catalog-variant-stock">
+              <span><strong>${escapeHtml(variant.color)}</strong><small>Catalog stock · separate from market stock</small></span>
+              <span class="catalog-stock-controls">
+                <button class="stepper-button" type="button" data-catalog-stock-action="decrease" data-id="${escapeHtml(product.id)}" data-variant-id="${escapeHtml(variant.id)}" aria-label="Remove one ${escapeHtml(variant.color)} item from catalog stock" ${numberValue(variant.quantity) <= 0 ? "disabled" : ""}>−</button>
+                <strong class="catalog-stock-count">${numberValue(variant.quantity)}</strong>
+                <button class="stepper-button" type="button" data-catalog-stock-action="increase" data-id="${escapeHtml(product.id)}" data-variant-id="${escapeHtml(variant.id)}" aria-label="Add one ${escapeHtml(variant.color)} item to catalog stock">+</button>
+              </span>
+            </span>
           </div>
         `).join("")}</div>
         <p class="muted catalog-note">Price changes apply to future markets only.</p>
@@ -427,11 +479,35 @@ function renderCatalogVariants() {
       <div class="variant-editor-fields">
         <div class="product-thumb variant-image-preview">${imageMarkup({ imageBase64: variant.imageBase64 })}</div>
         <label>Color name<input data-variant-color type="text" maxlength="50" value="${escapeHtml(variant.color)}" placeholder="e.g. Red background" required></label>
-        <label>Quantity<input data-variant-quantity type="number" min="0" step="1" inputmode="numeric" value="${numberValue(variant.quantity)}" required></label>
+        <label>Catalog quantity<input data-variant-quantity type="number" min="0" step="1" inputmode="numeric" value="${numberValue(variant.quantity)}" required></label>
         <label class="variant-photo-picker">Photo<input data-variant-image type="file" accept="image/*"><small>Optional image for this color.</small></label>
       </div>
     </article>
   `).join("");
+}
+
+async function changeCatalogVariantQuantity(productId, variantId, delta, button) {
+  const product = state.catalog.find((item) => item.id === productId);
+  if (!product) return;
+  const variants = catalogVariants(product);
+  const variant = variants.find((item) => item.id === variantId);
+  if (!variant) return;
+  const quantity = numberValue(variant.quantity) + delta;
+  if (!Number.isInteger(quantity) || quantity < 0) return;
+  const controls = [...button.closest(".catalog-stock-controls").querySelectorAll("button")];
+  controls.forEach((control) => { control.disabled = true; });
+  try {
+    await updateDoc(doc(db, "products", productId), {
+      variants: variants.map((item) => item.id === variantId ? { ...item, quantity } : item),
+      updatedAt: serverTimestamp()
+    });
+    toast(`${variant.color} catalog quantity updated.`);
+  } catch (error) {
+    console.error("Could not update catalog variant quantity.", error);
+    toast(`Could not update catalog quantity: ${error.message}`, true);
+  } finally {
+    controls.forEach((control) => { control.disabled = false; });
+  }
 }
 
 function renderProductPicker() {
@@ -2103,6 +2179,16 @@ function initializeAppUi() {
     renderCatalog();
   });
   $("#catalog-grid").addEventListener("click", (event) => {
+    const stockButton = event.target.closest("[data-catalog-stock-action]");
+    if (stockButton) {
+      void changeCatalogVariantQuantity(
+        stockButton.dataset.id,
+        stockButton.dataset.variantId,
+        stockButton.dataset.catalogStockAction === "increase" ? 1 : -1,
+        stockButton
+      );
+      return;
+    }
     const button = event.target.closest("[data-catalog-action]");
     if (!button) return;
     const { catalogAction, id } = button.dataset;
@@ -2307,6 +2393,7 @@ if (!isFirebaseConfigured) {
       state.accountingLoading = false;
       state.activeEventId = "";
       state.catalogMigrationStarted = false;
+      state.catalogQuantityMigrationStarted = false;
       showPage("hub");
       setScreen("login");
     }
