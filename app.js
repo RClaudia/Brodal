@@ -2039,6 +2039,7 @@ function initializeAppUi() {
     const card = event.target.closest("[data-module]");
     if (card?.dataset.module === "inventory") showPage("inventory-home");
     if (card?.dataset.module === "accounting") showPage("accounting");
+    if (event.target.closest('[data-home-page="items"]')) showPage("items");
   });
   $("#inventory-home-page").addEventListener("click", (event) => {
     if (event.target.closest('[data-inventory-page="markets"]')) showPage("dashboard");
