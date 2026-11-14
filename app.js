@@ -46,7 +46,7 @@ const state = {
   pickerSearch: "",
   pickerCategory: "All",
   editingCatalogId: null,
-  catalogImageBase64: "",
+  catalogVariants: [],
   selectedCatalogProductId: "",
   editingCategoryId: null,
   currentPage: "dashboard",
@@ -347,7 +347,8 @@ function renderCatalog() {
     (state.catalogCategory === "All" || product.category === state.catalogCategory)
     && (!search
       || String(product.sku ?? "").toLocaleLowerCase().includes(search)
-      || String(product.name ?? "").toLocaleLowerCase().includes(search))
+      || String(product.name ?? "").toLocaleLowerCase().includes(search)
+      || catalogVariants(product).some((variant) => variant.color.toLocaleLowerCase().includes(search)))
   );
   if (![...$("#catalog-category-filter").options].some((option) => option.value === state.catalogCategory)) {
     state.catalogCategory = "All";
@@ -357,17 +358,23 @@ function renderCatalog() {
   $("#catalog-empty-state").hidden = true;
   $("#catalog-grid").innerHTML = products.map((product) => `
     <article class="catalog-card">
-      <div class="catalog-card-image product-thumb">${imageMarkup(product)}</div>
+      <div class="catalog-card-image product-thumb">${imageMarkup({ imageBase64: catalogVariants(product)[0]?.imageBase64 })}</div>
       <div class="catalog-card-main">
         <div class="catalog-card-title">
           <div><h2>${escapeHtml(product.name)}</h2><span class="sku-badge">${escapeHtml(product.sku)}</span></div>
           <span class="product-card-category">${escapeHtml(product.category)}</span>
         </div>
         <strong class="catalog-price">${money.format(numberValue(product.price))}</strong>
+        <div class="catalog-variant-list">${catalogVariants(product).map((variant) => `
+          <div class="catalog-variant-summary">
+            <span class="product-thumb">${imageMarkup({ imageBase64: variant.imageBase64 })}</span>
+            <span><strong>${escapeHtml(variant.color)}</strong><small>Catalog quantity: ${numberValue(variant.quantity)}</small></span>
+          </div>
+        `).join("")}</div>
         <p class="muted catalog-note">Price changes apply to future markets only.</p>
         <div class="catalog-card-actions">
           <button class="button button-outline" type="button" data-catalog-action="edit" data-id="${escapeHtml(product.id)}">Edit item / price</button>
-          <button class="button button-primary" type="button" data-catalog-action="add" data-id="${escapeHtml(product.id)}" ${!state.activeEventId ? "disabled" : ""}>Add to current market</button>
+          <button class="button button-primary" type="button" data-catalog-action="add" data-id="${escapeHtml(product.id)}" ${!state.activeEventId || !missingCatalogVariants(product).length ? "disabled" : ""}>Add to current market</button>
           <button class="button button-danger" type="button" data-catalog-action="delete" data-id="${escapeHtml(product.id)}">Remove</button>
         </div>
       </div>
@@ -377,24 +384,71 @@ function renderCatalog() {
   $("#catalog-loading").hidden = true;
 }
 
+function catalogVariants(product) {
+  if (Array.isArray(product.variants) && product.variants.length) {
+    return product.variants.map((variant) => ({
+      id: String(variant.id ?? ""),
+      color: String(variant.color ?? "Standard"),
+      imageBase64: String(variant.imageBase64 ?? ""),
+      quantity: Math.max(0, Math.floor(numberValue(variant.quantity)))
+    }));
+  }
+  return [{
+    id: "default",
+    color: String(product.color ?? "Standard"),
+    imageBase64: String(product.imageBase64 ?? ""),
+    quantity: 0
+  }];
+}
+
+function marketVariantId(item) {
+  return String(item.variantId ?? "default");
+}
+
+function missingCatalogVariants(product) {
+  const existing = new Set(state.inventory
+    .filter((item) => item.productId === product.id
+      || (!item.productId && String(item.sku ?? "").trim().toLocaleLowerCase() === String(product.sku ?? "").trim().toLocaleLowerCase()))
+    .map(marketVariantId));
+  return catalogVariants(product).filter((variant) => !existing.has(variant.id));
+}
+
+function createVariantId() {
+  return crypto.randomUUID();
+}
+
+function renderCatalogVariants() {
+  $("#catalog-variants").innerHTML = state.catalogVariants.map((variant, index) => `
+    <article class="catalog-variant-editor" data-variant-row data-variant-id="${escapeHtml(variant.id)}">
+      <div class="catalog-variant-editor-top">
+        <span class="variant-index">Color ${index + 1}</span>
+        <button class="text-button danger" type="button" data-remove-variant="${escapeHtml(variant.id)}" ${state.catalogVariants.length <= 1 ? "disabled" : ""}>Remove</button>
+      </div>
+      <div class="variant-editor-fields">
+        <div class="product-thumb variant-image-preview">${imageMarkup({ imageBase64: variant.imageBase64 })}</div>
+        <label>Color name<input data-variant-color type="text" maxlength="50" value="${escapeHtml(variant.color)}" placeholder="e.g. Red background" required></label>
+        <label>Quantity<input data-variant-quantity type="number" min="0" step="1" inputmode="numeric" value="${numberValue(variant.quantity)}" required></label>
+        <label class="variant-photo-picker">Photo<input data-variant-image type="file" accept="image/*"><small>Optional image for this color.</small></label>
+      </div>
+    </article>
+  `).join("");
+}
+
 function renderProductPicker() {
   const search = state.pickerSearch.trim().toLocaleLowerCase();
   const products = state.catalog.filter((product) =>
     (state.pickerCategory === "All" || product.category === state.pickerCategory)
     && (!search
       || String(product.sku ?? "").toLocaleLowerCase().includes(search)
-      || String(product.name ?? "").toLocaleLowerCase().includes(search))
+      || String(product.name ?? "").toLocaleLowerCase().includes(search)
+      || catalogVariants(product).some((variant) => variant.color.toLocaleLowerCase().includes(search)))
   );
-  const activeEventItems = new Set(state.inventory.flatMap((item) => [
-    item.productId,
-    String(item.sku ?? "").trim().toLocaleLowerCase()
-  ]).filter(Boolean));
   $("#product-picker-list").innerHTML = products.map((product) => {
-    const alreadyAdded = activeEventItems.has(product.id)
-      || activeEventItems.has(String(product.sku ?? "").trim().toLocaleLowerCase());
+    const remaining = missingCatalogVariants(product);
+    const alreadyAdded = remaining.length === 0;
     return `<button class="picker-product" type="button" data-picker-product="${escapeHtml(product.id)}" ${alreadyAdded ? "disabled" : ""}>
-      <span class="product-thumb">${imageMarkup(product)}</span>
-      <span class="picker-product-main"><strong>${escapeHtml(product.name)}</strong><small>${escapeHtml(product.sku)} · ${escapeHtml(product.category)}</small></span>
+      <span class="product-thumb">${imageMarkup({ imageBase64: catalogVariants(product)[0]?.imageBase64 })}</span>
+      <span class="picker-product-main"><strong>${escapeHtml(product.name)}</strong><small>${escapeHtml(product.sku)} · ${escapeHtml(product.category)} · ${remaining.length} color${remaining.length === 1 ? "" : "s"} to add</small></span>
       <span class="picker-product-price">${money.format(numberValue(product.price))}</span>
       <span class="picker-product-action">${alreadyAdded ? "Added" : "＋"}</span>
     </button>`;
@@ -427,13 +481,12 @@ function showPage(name) {
   $("#items-page").hidden = name !== "items";
   $("#settings-page").hidden = name !== "settings";
   $(".mobile-action-bar").hidden = name !== "dashboard";
-  $("#inventory-navigation").hidden = state.currentModule !== "inventory";
-  $("#inventory-module-button").setAttribute("aria-current", name === "inventory-home" ? "page" : "false");
+  $("#inventory-module-button").setAttribute("aria-current",
+    ["inventory-home", "dashboard", "items"].includes(name) ? "page" : "false");
   $("#dashboard-page-button").setAttribute("aria-current", name === "dashboard" ? "page" : "false");
   $("#items-page-button").setAttribute("aria-current", name === "items" ? "page" : "false");
   $("#settings-button").setAttribute("aria-current", name === "settings" ? "page" : "false");
   $("#workspace-button").setAttribute("aria-current", name === "hub" ? "page" : "false");
-  $("#accounting-module-button").setAttribute("aria-current", state.currentModule === "accounting" ? "page" : "false");
   if (name === "items") renderCatalog();
   if (name === "accounting") renderAccounting();
 }
@@ -719,7 +772,8 @@ function getFilteredInventory() {
     .filter((item) => state.selectedCategory === "All" || item.category === state.selectedCategory)
     .filter((item) => !search
       || String(item.sku ?? "").toLocaleLowerCase().includes(search)
-      || String(item.name ?? "").toLocaleLowerCase().includes(search))
+      || String(item.name ?? "").toLocaleLowerCase().includes(search)
+      || String(item.color ?? "").toLocaleLowerCase().includes(search))
     .sort((a, b) => {
       const first = a[state.sortBy] ?? "";
       const second = b[state.sortBy] ?? "";
@@ -851,6 +905,7 @@ function renderInventory() {
         <div class="product-card-title">
           <h3>${escapeHtml(item.name)}</h3>
           <span class="sku-badge">${escapeHtml(item.sku)}</span>
+          ${item.color ? `<span class="product-color-label">${escapeHtml(item.color)}</span>` : ""}
         </div>
         <span class="product-card-category">${escapeHtml(item.category)}</span>
       </div>
@@ -878,7 +933,7 @@ function renderInventory() {
     return `<tr>
       <td><div class="product-thumb">${imageMarkup(item)}</div></td>
       <td><span class="sku-badge">${escapeHtml(item.sku)}</span></td>
-      <td class="product-name-cell" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</td>
+      <td class="product-name-cell" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}${item.color ? `<small class="product-color-label">${escapeHtml(item.color)}</small>` : ""}</td>
       <td>${escapeHtml(item.category)}</td>
       <td>${money.format(numberValue(item.price))}</td>
       <td>${totalQuantityControls(item)}</td>
@@ -960,10 +1015,8 @@ function openProductQuantityDialog(product) {
     toast("Create or choose an event before adding inventory.", true);
     return;
   }
-  if (state.inventory.some((item) =>
-    item.productId === product.id
-    || String(item.sku ?? "").trim().toLocaleLowerCase() === String(product.sku ?? "").trim().toLocaleLowerCase()
-  )) {
+  const variants = missingCatalogVariants(product);
+  if (!variants.length) {
     toast("This item is already in the selected market.", true);
     return;
   }
@@ -971,6 +1024,13 @@ function openProductQuantityDialog(product) {
   $("#selected-product-name").textContent = product.name;
   $("#selected-product-details").textContent = `${product.sku} · ${product.category} · ${money.format(numberValue(product.price))}`;
   $("#product-quantity-form").reset();
+  $("#product-variant-stock-list").innerHTML = variants.map((variant) => `
+    <label class="market-variant-stock" data-market-variant-id="${escapeHtml(variant.id)}">
+      <span class="product-thumb">${imageMarkup({ imageBase64: variant.imageBase64 })}</span>
+      <span class="market-variant-copy"><strong>${escapeHtml(variant.color)}</strong><small>Initial market quantity</small></span>
+      <input data-market-variant-quantity type="number" min="0" step="1" inputmode="numeric" value="${numberValue(variant.quantity)}" aria-label="${escapeHtml(variant.color)} initial quantity" required>
+    </label>
+  `).join("");
   $("#product-quantity-error").hidden = true;
   productQuantityDialog.showModal();
 }
@@ -978,7 +1038,9 @@ function openProductQuantityDialog(product) {
 function openCatalogItemDialog(product = null) {
   $("#catalog-item-form").reset();
   state.editingCatalogId = product?.id ?? null;
-  state.catalogImageBase64 = product?.imageBase64 ?? "";
+  state.catalogVariants = product
+    ? catalogVariants(product).map((variant) => ({ ...variant }))
+    : [{ id: createVariantId(), color: "Standard", imageBase64: "", quantity: 0 }];
   $("#catalog-item-title").textContent = product ? "Edit Item" : "Add Item";
   $("#catalog-item-eyebrow").textContent = product ? "UPDATE ITEM CATALOG" : "PRODUCT CATALOG";
   $("#save-catalog-item-button").textContent = product ? "Save changes" : "Save item";
@@ -992,10 +1054,7 @@ function openCatalogItemDialog(product = null) {
     $("#catalog-item-form").elements.unitCost.value = numberValue(product.unitCost);
     $("#catalog-item-form").elements.notes.value = product.notes ?? "";
   }
-  $("#catalog-image-input").value = "";
-  $("#catalog-image-preview").innerHTML = state.catalogImageBase64
-    ? `<img src="data:image/jpeg;base64,${escapeHtml(state.catalogImageBase64)}" alt="Item preview">`
-    : "<span>Image preview</span>";
+  renderCatalogVariants();
   catalogItemDialog.showModal();
 }
 
@@ -1015,11 +1074,26 @@ async function handleCatalogItemSubmit(event) {
     );
     if (duplicate) throw new Error(`SKU "${sku}" is already used by ${duplicate.name}.`);
 
+    const variants = [...form.querySelectorAll("[data-variant-row]")].map((row) => ({
+      id: row.dataset.variantId,
+      color: row.querySelector("[data-variant-color]").value.trim(),
+      imageBase64: state.catalogVariants.find((variant) => variant.id === row.dataset.variantId)?.imageBase64 ?? "",
+      quantity: Number(row.querySelector("[data-variant-quantity]").value)
+    }));
+    if (!variants.length || variants.length > 12) throw new Error("An item must have between 1 and 12 color variants.");
+    if (variants.some((variant) => !variant.color || !Number.isInteger(variant.quantity) || variant.quantity < 0)) {
+      throw new Error("Each color variant needs a name and a whole-number quantity of zero or more.");
+    }
+    if (new Set(variants.map((variant) => variant.color.toLocaleLowerCase())).size !== variants.length) {
+      throw new Error("Each color variant must have a unique name.");
+    }
+
     const product = {
       sku,
       name: String(formData.get("name")).trim(),
       category: String(formData.get("category")),
-      imageBase64: state.catalogImageBase64,
+      imageBase64: variants[0].imageBase64,
+      variants,
       price: Math.max(0, numberValue(formData.get("price"))),
       unitCost: Math.max(0, numberValue(formData.get("unitCost"))),
       notes: String(formData.get("notes") ?? "").trim(),
@@ -1062,23 +1136,35 @@ async function handleProductQuantitySubmit(event) {
   const submitButton = event.currentTarget.querySelector('button[type="submit"]');
   submitButton.disabled = true;
   try {
-    await addDoc(collection(db, "inventory"), {
-      marketId: state.activeEventId,
-      productId: product.id,
-      sku: product.sku,
-      name: product.name,
-      category: product.category,
-      imageBase64: product.imageBase64 ?? "",
-      price: numberValue(product.price),
-      unitCost: numberValue(product.unitCost),
-      totalQty: Math.max(0, Math.floor(numberValue(event.currentTarget.elements.totalQty.value))),
-      soldQty: 0,
-      notes: String(event.currentTarget.elements.notes.value ?? "").trim(),
-      updatedAt: serverTimestamp()
+    const batch = writeBatch(db);
+    const rows = [...$("#product-variant-stock-list").querySelectorAll("[data-market-variant-id]")];
+    if (!rows.length) throw new Error("There are no color variants available to add.");
+    rows.forEach((row) => {
+      const variant = catalogVariants(product).find((item) => item.id === row.dataset.marketVariantId);
+      if (!variant) throw new Error("A color variant could not be found. Close this dialog and try again.");
+      const totalQty = Number(row.querySelector("[data-market-variant-quantity]").value);
+      if (!Number.isInteger(totalQty) || totalQty < 0) throw new Error("Variant quantities must be whole numbers of zero or more.");
+      batch.set(doc(collection(db, "inventory")), {
+        marketId: state.activeEventId,
+        productId: product.id,
+        variantId: variant.id,
+        color: variant.color,
+        sku: product.sku,
+        name: product.name,
+        category: product.category,
+        imageBase64: variant.imageBase64,
+        price: numberValue(product.price),
+        unitCost: numberValue(product.unitCost),
+        totalQty,
+        soldQty: 0,
+        notes: String(event.currentTarget.elements.notes.value ?? "").trim(),
+        updatedAt: serverTimestamp()
+      });
     });
+    await batch.commit();
     productQuantityDialog.close();
     productPickerDialog.close();
-    toast(`${product.name} added to this market.`);
+    toast(`${rows.length} color variant${rows.length === 1 ? "" : "s"} added to this market, including zero-stock variants.`);
   } catch (error) {
     console.error("Could not add item to market.", error);
     showError($("#product-quantity-error"), error.message);
@@ -1356,6 +1442,7 @@ function inventoryFromCsv(text) {
     return {
       sku,
       name,
+      color: read(cells, "color") || "Standard",
       category,
       price: parseCsvPrice(read(cells, "price"), "Price", rowNumber),
       unitCost: parseCsvPrice(read(cells, "unitcost"), "Unit Cost", rowNumber, true),
@@ -1398,11 +1485,11 @@ async function importMarketFromCsv() {
   let importedCount = 0;
   try {
     const products = inventoryFromCsv(await file.text());
-    const seenSkus = new Set();
+    const seenVariants = new Set();
     products.forEach((product) => {
-      const skuKey = product.sku.toLocaleLowerCase();
-      if (seenSkus.has(skuKey)) throw new Error(`The CSV contains duplicate SKU "${product.sku}".`);
-      seenSkus.add(skuKey);
+      const variantKey = `${product.sku.toLocaleLowerCase()}\u0000${product.color.toLocaleLowerCase()}`;
+      if (seenVariants.has(variantKey)) throw new Error(`The CSV contains duplicate color "${product.color}" for SKU "${product.sku}".`);
+      seenVariants.add(variantKey);
     });
 
     const importedProducts = new Map();
@@ -1412,10 +1499,31 @@ async function importMarketFromCsv() {
     ]));
     products.forEach((product) => {
       const skuKey = product.sku.toLocaleLowerCase();
-      const existing = existingProducts.get(skuKey);
-      importedProducts.set(skuKey, existing
-        ? { product, productId: existing.id, shouldCreateCatalogItem: false }
-        : { product, productId: doc(collection(db, "products")).id, shouldCreateCatalogItem: true });
+      let catalogItem = importedProducts.get(skuKey);
+      if (!catalogItem) {
+        const existing = existingProducts.get(skuKey) ?? null;
+        catalogItem = {
+          product,
+          existing,
+          productId: existing?.id ?? doc(collection(db, "products")).id,
+          variants: existing ? catalogVariants(existing) : [],
+          shouldCreateCatalogItem: !existing,
+          shouldUpdateCatalogItem: false
+        };
+        importedProducts.set(skuKey, catalogItem);
+      }
+      let variant = catalogItem.variants.find((item) => item.color.toLocaleLowerCase() === product.color.toLocaleLowerCase());
+      if (!variant) {
+        variant = {
+          id: createVariantId(),
+          color: product.color,
+          imageBase64: "",
+          quantity: product.totalQty
+        };
+        catalogItem.variants.push(variant);
+        catalogItem.shouldUpdateCatalogItem = Boolean(catalogItem.existing);
+      }
+      product.variantId = variant.id;
     });
 
     const missingCategories = [...new Set(products.map((product) => product.category))]
@@ -1444,24 +1552,43 @@ async function importMarketFromCsv() {
     for (let start = 0; start < products.length || start === 0; start += 200) {
       const batch = writeBatch(db);
       if (start === 0) batch.set(eventRef, eventData);
+      if (start === 0) {
+        importedProducts.forEach((catalogItem) => {
+          if (catalogItem.shouldCreateCatalogItem) {
+            batch.set(doc(db, "products", catalogItem.productId), {
+              sku: catalogItem.product.sku,
+              name: catalogItem.product.name,
+              category: catalogItem.product.category,
+              imageBase64: catalogItem.variants[0]?.imageBase64 ?? "",
+              variants: catalogItem.variants,
+              price: catalogItem.product.price,
+              unitCost: catalogItem.product.unitCost,
+              notes: catalogItem.product.notes,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp()
+            });
+          } else if (catalogItem.shouldUpdateCatalogItem) {
+            const existing = catalogItem.existing;
+            batch.update(doc(db, "products", catalogItem.productId), {
+              sku: existing.sku,
+              name: existing.name,
+              category: existing.category,
+              imageBase64: catalogItem.variants[0]?.imageBase64 ?? existing.imageBase64 ?? "",
+              variants: catalogItem.variants,
+              price: numberValue(existing.price),
+              unitCost: numberValue(existing.unitCost),
+              notes: existing.notes ?? "",
+              updatedAt: serverTimestamp()
+            });
+          }
+        });
+      }
       products.slice(start, start + 200).forEach((product) => {
         const catalogItem = importedProducts.get(product.sku.toLocaleLowerCase());
-        if (catalogItem.shouldCreateCatalogItem) {
-          batch.set(doc(db, "products", catalogItem.productId), {
-            sku: product.sku,
-            name: product.name,
-            category: product.category,
-            imageBase64: "",
-            price: product.price,
-            unitCost: product.unitCost,
-            notes: product.notes,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
-          });
-        }
         batch.set(doc(collection(db, "inventory")), {
           marketId: eventRef.id,
           productId: catalogItem.productId,
+          color: product.color,
           ...product,
           imageBase64: "",
           updatedAt: serverTimestamp()
@@ -1549,6 +1676,8 @@ async function createEvent(eventData) {
         batch.set(productRef, {
           marketId: eventRef.id,
           ...(product.productId ? { productId: product.productId } : {}),
+          ...(product.variantId ? { variantId: product.variantId } : {}),
+          ...(product.color ? { color: product.color } : {}),
           sku: product.sku ?? "",
           name: product.name ?? "",
           category: product.category ?? "Other",
@@ -1792,7 +1921,7 @@ function exportCsv() {
     toast("Choose an event before exporting.", true);
     return;
   }
-  const fields = ["SKU", "Product Name", "Category", "Price", "Unit Cost", "Total Qty", "Available Qty", "Sold Qty", "Money Made", "Total Price", "Net Profit", "Notes"];
+  const fields = ["SKU", "Product Name", "Color", "Category", "Price", "Unit Cost", "Total Qty", "Available Qty", "Sold Qty", "Money Made", "Total Price", "Net Profit", "Notes"];
   const quote = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
   const rows = state.inventory.map((item) => {
     const price = numberValue(item.price);
@@ -1802,6 +1931,7 @@ function exportCsv() {
     return [
       item.sku,
       item.name,
+      item.color ?? "Standard",
       item.category,
       price.toFixed(2),
       cost.toFixed(2),
@@ -1878,7 +2008,19 @@ function initializeAppUi() {
 
   $("#workspace-button").addEventListener("click", () => showPage("hub"));
   $("#inventory-module-button").addEventListener("click", () => showPage("inventory-home"));
-  $("#accounting-module-button").addEventListener("click", () => showPage("accounting"));
+  $("#mobile-menu-toggle").addEventListener("click", () => {
+    const expanded = $("#mobile-menu-toggle").getAttribute("aria-expanded") === "true";
+    $("#mobile-menu-toggle").setAttribute("aria-expanded", String(!expanded));
+    $("#mobile-menu-toggle").setAttribute("aria-label", expanded ? "Open menu" : "Close menu");
+    $(".topbar").classList.toggle("is-menu-open", !expanded);
+  });
+  $("#primary-navigation").addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (!button) return;
+    $(".topbar").classList.remove("is-menu-open");
+    $("#mobile-menu-toggle").setAttribute("aria-expanded", "false");
+    $("#mobile-menu-toggle").setAttribute("aria-label", "Open menu");
+  });
   $("#workspace-page").addEventListener("click", (event) => {
     const card = event.target.closest("[data-module]");
     if (card?.dataset.module === "inventory") showPage("inventory-home");
@@ -1944,6 +2086,11 @@ function initializeAppUi() {
       $("#event-menu").hidden = true;
       $("#event-select-button").setAttribute("aria-expanded", "false");
     }
+    if (!event.target.closest(".topbar")) {
+      $(".topbar").classList.remove("is-menu-open");
+      $("#mobile-menu-toggle").setAttribute("aria-expanded", "false");
+      $("#mobile-menu-toggle").setAttribute("aria-label", "Open menu");
+    }
   });
   $("#add-catalog-item-button").addEventListener("click", () => openCatalogItemDialog());
   $("#catalog-empty-add-button").addEventListener("click", () => openCatalogItemDialog());
@@ -1963,6 +2110,43 @@ function initializeAppUi() {
     if (catalogAction === "edit" && product) openCatalogItemDialog(product);
     if (catalogAction === "add" && product) openProductQuantityDialog(product);
     if (catalogAction === "delete") void deleteCatalogItem(id);
+  });
+  $("#add-catalog-variant").addEventListener("click", () => {
+    if (state.catalogVariants.length >= 12) {
+      toast("An item can have up to 12 color variants.", true);
+      return;
+    }
+    state.catalogVariants.push({ id: createVariantId(), color: "", imageBase64: "", quantity: 0 });
+    renderCatalogVariants();
+  });
+  $("#catalog-variants").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-remove-variant]");
+    if (!button || state.catalogVariants.length <= 1) return;
+    state.catalogVariants = state.catalogVariants.filter((variant) => variant.id !== button.dataset.removeVariant);
+    renderCatalogVariants();
+  });
+  $("#catalog-variants").addEventListener("change", async (event) => {
+    const input = event.target.closest("[data-variant-image]");
+    if (!input) return;
+    const file = input.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      showError($("#catalog-item-error"), "Choose an image file.");
+      input.value = "";
+      return;
+    }
+    try {
+      const imageBase64 = await compressImage(file);
+      const variant = state.catalogVariants.find((item) => item.id === input.closest("[data-variant-row]")?.dataset.variantId);
+      if (!variant) throw new Error("Could not match this image to its color variant.");
+      variant.imageBase64 = imageBase64;
+      input.closest("[data-variant-row]").querySelector(".variant-image-preview").innerHTML =
+        `<img src="data:image/jpeg;base64,${escapeHtml(imageBase64)}" alt="${escapeHtml(variant.color)} variant preview">`;
+      clearError($("#catalog-item-error"));
+    } catch (error) {
+      console.error("Could not prepare variant image.", error);
+      showError($("#catalog-item-error"), error.message);
+    }
   });
   $("#product-picker-search").addEventListener("input", (event) => {
     state.pickerSearch = event.target.value;
@@ -2082,24 +2266,6 @@ function initializeAppUi() {
       showError($("#inventory-form-error"), error.message);
     }
   });
-  $("#catalog-image-input").addEventListener("change", async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      showError($("#catalog-item-error"), "Choose an image file.");
-      event.target.value = "";
-      return;
-    }
-    try {
-      state.catalogImageBase64 = await compressImage(file);
-      $("#catalog-image-preview").innerHTML = `<img src="data:image/jpeg;base64,${escapeHtml(state.catalogImageBase64)}" alt="Item preview">`;
-      clearError($("#catalog-item-error"));
-    } catch (error) {
-      console.error("Could not prepare catalog image.", error);
-      showError($("#catalog-item-error"), error.message);
-    }
-  });
-
   document.querySelectorAll("[data-close-dialog]").forEach((button) => {
     button.addEventListener("click", () => document.getElementById(button.dataset.closeDialog).close());
   });

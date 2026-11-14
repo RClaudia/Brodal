@@ -6,6 +6,34 @@ service cloud.firestore {
         && request.auth.uid == "REPLACE_WITH_YOUR_FIREBASE_AUTH_UID";
     }
 
+    function validColorVariant(variant) {
+      return variant is map
+        && variant.keys().hasOnly(["id", "color", "imageBase64", "quantity"])
+        && variant.id is string
+        && variant.color is string
+        && variant.imageBase64 is string
+        && variant.quantity is int
+        && variant.quantity >= 0;
+    }
+
+    function validColorVariants(variants) {
+      return variants is list
+        && variants.size() > 0
+        && variants.size() <= 12
+        && validColorVariant(variants[0])
+        && (variants.size() < 2 || validColorVariant(variants[1]))
+        && (variants.size() < 3 || validColorVariant(variants[2]))
+        && (variants.size() < 4 || validColorVariant(variants[3]))
+        && (variants.size() < 5 || validColorVariant(variants[4]))
+        && (variants.size() < 6 || validColorVariant(variants[5]))
+        && (variants.size() < 7 || validColorVariant(variants[6]))
+        && (variants.size() < 8 || validColorVariant(variants[7]))
+        && (variants.size() < 9 || validColorVariant(variants[8]))
+        && (variants.size() < 10 || validColorVariant(variants[9]))
+        && (variants.size() < 11 || validColorVariant(variants[10]))
+        && (variants.size() < 12 || validColorVariant(variants[11]));
+    }
+
     match /events/{eventId} {
       allow read: if isOwner();
       allow create: if isOwner()
@@ -26,11 +54,13 @@ service cloud.firestore {
       allow read: if isOwner();
       allow create, update: if isOwner()
         && request.resource.data.keys().hasOnly([
-          "marketId", "productId", "sku", "name", "category", "imageBase64", "price",
+          "marketId", "productId", "variantId", "color", "sku", "name", "category", "imageBase64", "price",
           "unitCost", "totalQty", "soldQty", "notes", "updatedAt"
         ])
         && request.resource.data.marketId is string
         && (!("productId" in request.resource.data) || request.resource.data.productId is string)
+        && (!("variantId" in request.resource.data) || request.resource.data.variantId is string)
+        && (!("color" in request.resource.data) || request.resource.data.color is string)
         && existsAfter(/databases/$(database)/documents/events/$(request.resource.data.marketId))
         && request.resource.data.sku is string
         && request.resource.data.name is string
@@ -52,7 +82,7 @@ service cloud.firestore {
       allow create: if isOwner()
         && request.resource.data.keys().hasOnly([
           "sku", "name", "category", "imageBase64", "price",
-          "unitCost", "notes", "createdAt", "updatedAt"
+          "unitCost", "notes", "variants", "createdAt", "updatedAt"
         ])
         && request.resource.data.sku is string
         && request.resource.data.name is string
@@ -61,12 +91,13 @@ service cloud.firestore {
         && request.resource.data.price is number
         && request.resource.data.unitCost is number
         && request.resource.data.notes is string
+        && (!("variants" in request.resource.data) || validColorVariants(request.resource.data.variants))
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
       allow update: if isOwner()
         && request.resource.data.keys().hasOnly([
           "sku", "name", "category", "imageBase64", "price",
-          "unitCost", "notes", "createdAt", "updatedAt"
+          "unitCost", "notes", "variants", "createdAt", "updatedAt"
         ])
         && request.resource.data.sku is string
         && request.resource.data.name is string
@@ -75,6 +106,7 @@ service cloud.firestore {
         && request.resource.data.price is number
         && request.resource.data.unitCost is number
         && request.resource.data.notes is string
+        && (!("variants" in request.resource.data) || validColorVariants(request.resource.data.variants))
         && request.resource.data.updatedAt == request.time;
       allow delete: if isOwner();
     }

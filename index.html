@@ -49,21 +49,19 @@
           <img src="./images/logo.png" alt="">
           <span>Inventory <small>by Brodal</small></span>
         </a>
+        <button id="mobile-menu-toggle" class="button button-quiet mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="primary-navigation" aria-label="Open menu">
+          <span aria-hidden="true">☰</span><span class="mobile-menu-label">Menu</span>
+        </button>
         <div class="topbar-actions">
           <span id="connection-status" class="connection-status" role="status">Connecting…</span>
           <span id="user-email" class="user-email"></span>
-          <button id="workspace-button" class="button button-quiet" type="button">Home</button>
-          <span id="inventory-navigation" class="inventory-navigation" hidden>
+          <nav id="primary-navigation" class="primary-navigation" aria-label="Main navigation">
+            <button id="workspace-button" class="button button-quiet" type="button">Home</button>
+            <button id="settings-button" class="button button-quiet settings-button" type="button">Settings</button>
             <button id="inventory-module-button" class="button button-quiet" type="button">Inventory</button>
-            <span id="inventory-nav" class="inventory-nav">
-              <button id="dashboard-page-button" class="button button-quiet" type="button">Markets</button>
-              <button id="items-page-button" class="button button-quiet" type="button">Items</button>
-              <button id="settings-button" class="button button-quiet settings-button" type="button" aria-label="Settings">
-                <span aria-hidden="true">⚙</span><span class="settings-label">Settings</span>
-              </button>
-            </span>
-          </span>
-          <button id="accounting-module-button" class="button button-quiet" type="button">Contabilitate</button>
+            <button id="dashboard-page-button" class="button button-quiet" type="button">Markets</button>
+            <button id="items-page-button" class="button button-quiet" type="button">Items</button>
+          </nav>
           <button id="logout-button" class="button button-quiet" type="button">Log out</button>
         </div>
       </header>
@@ -584,10 +582,7 @@
           </div>
           <button class="icon-button" data-close-dialog="product-quantity-dialog" type="button" aria-label="Close">×</button>
         </div>
-        <label>
-          Quantity prepared
-          <input name="totalQty" type="number" min="0" step="1" value="0" required>
-        </label>
+        <div id="product-variant-stock-list" class="product-variant-stock-list"></div>
         <label>
           Notes <span class="optional-label">Optional</span>
           <textarea name="notes" rows="2" maxlength="500"></textarea>
@@ -609,14 +604,6 @@
           </div>
           <button class="icon-button" data-close-dialog="catalog-item-dialog" type="button" aria-label="Close">×</button>
         </div>
-        <div class="photo-row">
-          <div id="catalog-image-preview" class="image-preview"><span>Image preview</span></div>
-          <label class="photo-picker">
-            Product photo <span class="optional-label">Optional</span>
-            <input id="catalog-image-input" type="file" accept="image/*">
-            <span class="helper-text">Compressed product image. Historical market photos remain unchanged.</span>
-          </label>
-        </div>
         <div class="form-row">
           <label>SKU<input name="sku" type="text" maxlength="50" required></label>
           <label>Item name<input name="name" type="text" maxlength="100" required></label>
@@ -629,7 +616,14 @@
           <label>Material cost (RON)<input name="unitCost" type="number" min="0" step="0.01" value="0"></label>
           <label>Notes<input name="notes" type="text" maxlength="500"></label>
         </div>
-        <p class="helper-text">Price changes saved here apply when you add this item to future markets. Existing market records keep their saved price.</p>
+        <section class="variant-editor" aria-labelledby="variant-editor-title">
+          <div class="variant-editor-heading">
+            <div><h3 id="variant-editor-title">Color variants</h3><p class="muted">Each color has its own photo and starting quantity.</p></div>
+            <button id="add-catalog-variant" class="button button-outline" type="button">＋ Add color</button>
+          </div>
+          <div id="catalog-variants" class="catalog-variants"></div>
+        </section>
+        <p class="helper-text">Price changes saved here apply to future markets. Existing market records keep their saved price and quantities.</p>
         <p id="catalog-item-error" class="form-error" role="alert" hidden></p>
         <div class="dialog-actions">
           <button class="button button-quiet" data-close-dialog="catalog-item-dialog" type="button">Cancel</button>
