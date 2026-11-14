@@ -31,6 +31,10 @@ body {
   color: var(--ink);
 }
 
+#login-title {
+  text-align: center;
+}
+
 button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 [hidden] { display: none !important; }
