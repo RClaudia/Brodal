@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#ebf8fe">
-    <meta name="description" content="Spațiul de lucru Brodal pentru inventar, târguri, articole și contabilitate.">
+    <meta name="description" content="Spațiul de lucru Brodal pentru inventar, târguri, produse și contabilitate.">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Brodal">
@@ -13,7 +13,7 @@
     <link rel="apple-touch-icon" href="./images/app-icon.png">
     <link rel="stylesheet" href="./styles.css">
     <script src="https://cdn.tailwindcss.com"></script>
-    <title>Brodal — Spațiu de lucru</title>
+    <title>Brodal</title>
   </head>
   <body>
     <div id="loading-screen" class="loading-screen" role="status" aria-live="polite">
@@ -25,7 +25,6 @@
       <section class="login-card" aria-labelledby="login-title">
         <img class="login-logo" src="./images/logo.png" alt="Brodal handmade">
         <h1 id="login-title" class="login-title">Bine ai revenit</h1>
-        <p class="muted">Autentifică-te pentru a-ți gestiona produsele și târgurile.</p>
         <div id="config-notice" class="notice notice-info" role="status" hidden></div>
         <form id="login-form" class="form-stack">
           <label>
@@ -39,15 +38,15 @@
           <p id="login-error" class="form-error" role="alert" hidden></p>
           <button id="login-button" class="button button-primary button-wide" type="submit">Autentificare</button>
         </form>
-        <p class="login-footnote">Inventarul tău, pregătit pentru următorul târg.</p>
+        <p class="login-footnote">@_brodal</p>
       </section>
     </main>
 
     <div id="app-shell" class="app-shell" hidden>
       <header class="topbar">
-        <a class="brand" href="./" aria-label="Acasă — Spațiul Brodal">
+        <a class="brand" href="./" aria-label="Panou principal">
           <img src="./images/logo.png" alt="">
-          <span>Spațiu de lucru <small>Brodal</small></span>
+          <span>Brodal Dashboard</span>
         </a>
         <button id="back-button" class="button button-quiet back-button" type="button" hidden>← Înapoi</button>
         <button id="mobile-menu-toggle" class="button button-quiet mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="primary-navigation" aria-label="Deschide meniul">
@@ -58,12 +57,12 @@
           <span id="user-email" class="user-email"></span>
           <nav id="primary-navigation" class="primary-navigation" aria-label="Navigare principală">
             <div class="home-menu-wrap">
-              <button id="home-menu-button" class="button button-quiet" type="button" aria-expanded="false" aria-haspopup="true" aria-controls="home-menu">Acasă <span aria-hidden="true">⌄</span></button>
+              <button id="home-menu-button" class="button button-quiet" type="button" aria-expanded="false" aria-haspopup="true" aria-controls="home-menu">Panou principal <span aria-hidden="true">▼</span></button>
               <div id="home-menu" class="home-menu" hidden>
-                <button type="button" data-nav-page="hub">Acasă</button>
+                <button type="button" data-nav-page="hub">Panou principal</button>
                 <button type="button" data-nav-page="inventory-home">Inventar</button>
                 <button type="button" data-nav-page="accounting">Contabilitate</button>
-                <button type="button" data-nav-page="items">Articole</button>
+                <button type="button" data-nav-page="items">Produse</button>
               </div>
             </div>
             <button id="settings-button" class="button button-quiet settings-button" type="button">Setări</button>
@@ -74,7 +73,7 @@
 
       <main id="workspace-page" class="dashboard page-view" hidden>
         <section class="workspace-welcome">
-          <h1>Acasă</h1>
+          <h1>Panou principal</h1>
         </section>
         <section class="workspace-grid" aria-label="Secțiuni de lucru">
           <button class="workspace-card" type="button" data-module="inventory">
@@ -88,7 +87,7 @@
           <button class="workspace-card workspace-card-items" type="button" data-home-page="items">
             <span class="workspace-icon" aria-hidden="true">▦</span>
             <span class="workspace-card-copy">
-              <strong>Articole</strong>
+              <strong>Produse</strong>
               <small>Gestionează produsele, variantele și prețurile.</small>
             </span>
             <span class="workspace-arrow" aria-hidden="true">›</span>
@@ -289,13 +288,13 @@
       <main id="dashboard-page" class="dashboard">
         <section class="event-toolbar" aria-label="Selectarea târgului">
           <div class="event-select-wrap">
-            <label id="event-select-label">Târgul sau actualizarea magazinului</label>
+            <label id="event-select-label">Târgul sau shop update</label>
             <button id="event-select-button" class="event-select-button" type="button" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="event-select-label event-select-value">
               <span id="event-select-value">Se încarcă târgurile…</span><span class="event-select-caret" aria-hidden="true">⌄</span>
             </button>
             <div id="event-menu" class="event-menu" role="listbox" aria-labelledby="event-select-label" hidden></div>
           </div>
-          <button id="new-event-button" class="button button-outline" type="button">＋ Târg nou</button>
+          <button id="new-event-button" class="button button-outline" type="button">＋ Eveniment nou</button>
         </section>
 
         <section id="event-heading" class="event-heading" hidden>
@@ -315,7 +314,7 @@
           <article class="summary-card">
             <span class="summary-label">Total pregătit</span>
             <strong id="summary-prepared">0</strong>
-            <span class="summary-caption">produse aduse sau pregătite</span>
+            <span class="summary-caption">produse pregătite</span>
           </article>
           <article class="summary-card">
             <span class="summary-label">Total vândut</span>
@@ -337,7 +336,7 @@
         <section class="inventory-section">
           <div class="inventory-heading">
             <div>
-              <h2>Stocul târgului</h2>
+              <h2>Stoc</h2>
               <p id="inventory-count" class="muted">Alege un târg pentru a vedea produsele.</p>
             </div>
             <button id="add-inventory-button" class="button button-primary desktop-add" type="button">＋ Adaugă produs</button>
@@ -345,9 +344,9 @@
 
           <div class="filters">
             <label class="search-wrap">
-              <span class="sr-only">Caută după SKU sau denumirea produsului</span>
+              <span class="sr-only">Caută după SKU sau denumire</span>
               <span aria-hidden="true" class="search-icon">⌕</span>
-              <input id="search-input" type="search" placeholder="Caută după SKU sau denumirea produsului">
+              <input id="search-input" type="search" placeholder="Caută după SKU sau denumire">
             </label>
             <div id="category-pills" class="category-pills" aria-label="Filtrează după categorie"></div>
             <button id="export-button" class="button button-quiet export-button" type="button">Exportă CSV</button>
@@ -431,17 +430,18 @@
         <div class="page-heading">
           <div>
             <p class="eyebrow">CATALOG PRODUSE</p>
-            <h1>Articole</h1>
+            <h1>Produse</h1>
             <p class="muted">Gestionează produsele reutilizabile și prețurile pentru târgurile viitoare. Prețurile salvate în târguri nu se modifică.</p>
+            <p class="muted">Modificările de preț se aplică doar târgurilor viitoare.</p>
           </div>
-          <button id="add-catalog-item-button" class="button button-primary" type="button">＋ Adaugă articol</button>
+          <button id="add-catalog-item-button" class="button button-primary" type="button">＋ Adaugă produs</button>
         </div>
         <section class="inventory-section">
           <div class="filters catalog-filters">
             <label class="search-wrap">
-              <span class="sr-only">Caută articole după SKU sau denumire</span>
+              <span class="sr-only">Caută produse după SKU sau denumire</span>
               <span aria-hidden="true" class="search-icon">⌕</span>
-              <input id="catalog-search" type="search" placeholder="Caută după SKU sau denumirea articolului">
+              <input id="catalog-search" type="search" placeholder="Caută după SKU sau denumire">
             </label>
             <select id="catalog-category-filter" aria-label="Filtrează catalogul după categorie"></select>
           </div>
@@ -449,9 +449,9 @@
             <span class="empty-art" aria-hidden="true">✿</span>
             <h3>Catalogul tău este pregătit</h3>
             <p class="muted">Adaugă produsele aici, apoi selectează-le pentru fiecare târg.</p>
-            <button id="catalog-empty-add-button" class="button button-primary" type="button">＋ Adaugă articol</button>
+            <button id="catalog-empty-add-button" class="button button-primary" type="button">＋ Adaugă produs</button>
           </div>
-          <div id="catalog-loading" class="inline-loading" hidden><span class="spinner" aria-hidden="true"></span> Se încarcă articolele…</div>
+          <div id="catalog-loading" class="inline-loading" hidden><span class="spinner" aria-hidden="true"></span> Se încarcă produsele…</div>
           <div id="catalog-grid" class="catalog-grid"></div>
         </section>
       </main>
@@ -461,7 +461,7 @@
           <div>
             <p class="eyebrow">SPAȚIUL TĂU DE LUCRU</p>
             <h1>Setări</h1>
-            <p class="muted">Gestionează târgurile, contabilitatea, articolele și contul.</p>
+            <p class="muted">Gestionează târgurile, contabilitatea, produsele și contul.</p>
           </div>
         </div>
         <section class="settings-section" aria-labelledby="market-settings-title">
@@ -510,16 +510,16 @@
           </div>
         </section>
         <section class="settings-section" aria-labelledby="items-settings-title">
-          <div class="settings-section-heading"><h3 id="items-settings-title">Articole</h3><p class="muted">Gestionează articolele reutilizabile și categoriile.</p></div>
+          <div class="settings-section-heading"><h3 id="items-settings-title">Produse</h3><p class="muted">Gestionează produsele reutilizabile și categoriile.</p></div>
           <div class="settings-card-grid">
             <button class="settings-action-card" data-settings-action="open-items" type="button">
               <span class="settings-action-icon" aria-hidden="true">▦</span>
-              <span><strong>Gestionează articolele</strong><small>Actualizează detaliile, variantele și prețurile articolelor.</small></span>
+              <span><strong>Gestionează produsele</strong><small>Actualizează detaliile, variantele și prețurile produselor.</small></span>
               <span class="settings-action-arrow" aria-hidden="true">›</span>
             </button>
             <button class="settings-action-card" data-settings-action="categories" type="button">
               <span class="settings-action-icon" aria-hidden="true">▧</span>
-              <span><strong>Categorii</strong><small>Adaugă sau șterge categoriile articolelor.</small></span>
+              <span><strong>Categorii</strong><small>Adaugă sau șterge categoriile produselor.</small></span>
               <span class="settings-action-arrow" aria-hidden="true">›</span>
             </button>
           </div>
@@ -613,7 +613,7 @@
         <div class="dialog-heading">
           <div>
             <p class="eyebrow">PLANIFICĂ URMĂTORUL TÂRG</p>
-            <h2>Târg nou / Actualizare magazin</h2>
+            <h2>Eveniment nou / Shop Update</h2>
           </div>
           <button class="icon-button" data-close-dialog="event-dialog" type="button" aria-label="Închide">×</button>
         </div>
@@ -625,7 +625,7 @@
           Tip
           <select name="type" required>
             <option value="Market">Târg</option>
-            <option value="Shop Update">Actualizare magazin</option>
+            <option value="Shop Update">Shop Update</option>
           </select>
         </label>
         <div class="form-row">
@@ -750,9 +750,9 @@
           </label>
         </div>
         <div id="product-picker-list" class="product-picker-list"></div>
-        <p id="product-picker-empty" class="muted picker-empty" hidden>Nu există articole potrivite. Adaugă mai întâi unul în pagina Articole.</p>
+        <p id="product-picker-empty" class="muted picker-empty" hidden>Nu există produse potrivite. Adaugă mai întâi unul în pagina Produse.</p>
         <div class="dialog-actions">
-          <button class="button button-outline" id="open-catalog-from-picker" type="button">Gestionează articolele</button>
+          <button class="button button-outline" id="open-catalog-from-picker" type="button">Gestionează produsele</button>
         </div>
       </section>
     </dialog>
@@ -820,7 +820,7 @@
     <dialog id="category-dialog" class="app-dialog">
       <form id="category-form" class="dialog-content">
         <div class="dialog-heading">
-          <div><p class="eyebrow">ORGANIZARE ARTICOLE</p><h2>Categorii</h2></div>
+          <div><p class="eyebrow">ORGANIZARE PRODUSE</p><h2>Categorii</h2></div>
           <button class="icon-button" data-close-dialog="category-dialog" type="button" aria-label="Închide">×</button>
         </div>
         <label>
@@ -858,7 +858,7 @@
               Tip
             <select name="type" required>
                 <option value="Market">Târg</option>
-                <option value="Shop Update">Actualizare magazin</option>
+                <option value="Shop Update">Shop Update</option>
             </select>
           </label>
           <div class="form-row">
@@ -914,7 +914,7 @@
           Tip
           <select id="import-event-type">
             <option value="Market">Târg</option>
-            <option value="Shop Update">Actualizare magazin</option>
+            <option value="Shop Update">Shop Update</option>
           </select>
         </label>
         <div class="form-row">

@@ -175,7 +175,7 @@ function eventIsClosed(event) {
 }
 
 function eventTypeLabel(type) {
-  return type === "Market" ? "Târg" : "Actualizare magazin";
+  return type === "Market" ? "Târg" : "Shop Update";
 }
 
 function categoryLabel(category) {
@@ -524,9 +524,8 @@ function renderCatalog() {
             <strong>${escapeHtml(variant.color)}</strong>
           </div>
         `).join("")}</div>
-        <p class="muted catalog-note">Modificările de preț se aplică doar târgurilor viitoare.</p>
         <div class="catalog-card-actions">
-          <button class="button button-outline" type="button" data-catalog-action="edit" data-id="${escapeHtml(product.id)}">Editează articolul / prețul</button>
+          <button class="button button-outline" type="button" data-catalog-action="edit" data-id="${escapeHtml(product.id)}">Editează</button>
           <button class="button button-primary" type="button" data-catalog-action="add" data-id="${escapeHtml(product.id)}" ${!state.activeEventId || eventIsClosed(state.events.find((event) => event.id === state.activeEventId)) || !missingCatalogVariants(product).length ? "disabled" : ""}>Adaugă în târgul curent</button>
           <button class="button button-danger" type="button" data-catalog-action="delete" data-id="${escapeHtml(product.id)}">Șterge</button>
         </div>
@@ -1552,7 +1551,7 @@ function renderInventory() {
     $("#empty-description").textContent = event
       ? marketClosed ? "Târgul s-a încheiat. Produsele și vânzările înregistrate sunt păstrate în istoric." : "Adaugă primul produs pentru a-i urmări stocul și vânzările."
       : "Creează un târg sau o actualizare a magazinului înainte de a adăuga produse.";
-    $("#empty-add-button").textContent = event ? "＋ Adaugă primul produs" : "＋ Târg nou";
+    $("#empty-add-button").textContent = event ? "＋ Adaugă primul produs" : "＋ Eveniment nou";
     $("#empty-add-button").dataset.action = event ? "add" : "new-event";
     $("#empty-add-button").hidden = marketClosed;
   } else if (filtered.length === 0) {
@@ -1931,7 +1930,7 @@ async function deleteCategory(id) {
   const category = state.categoryRecords.find((item) => item.id === id);
   if (!category) return;
   if (state.catalog.some((product) => product.category === category.name)) {
-    toast("Reasignează articolele din catalog înainte de a șterge această categorie.", true);
+    toast("Reasignează produsele din catalog înainte de a șterge această categorie.", true);
     return;
   }
   if (!window.confirm(`Elimini categoria „${category.name}” din listă? Înregistrările târgurilor anterioare o vor păstra.`)) return;

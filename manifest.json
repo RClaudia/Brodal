@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "Brodal — Spațiu de lucru",
+  "name": "Brodal",
   "short_name": "Brodal",
-  "description": "Gestionează inventarul, târgurile, articolele și contabilitatea Brodal.",
+  "description": "Gestionează inventarul, târgurile, produsele și contabilitatea Brodal.",
   "lang": "ro",
   "start_url": "./",
   "scope": "./",
