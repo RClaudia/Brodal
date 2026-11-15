@@ -371,11 +371,14 @@ button.workspace-card:hover { transform: translateY(-2px); border-color: #b7d5e1
 .fiscal-register-table-section { margin-top: 22px; }
 .fiscal-register-table-section h2 { margin: 0 0 10px; font-size: 1.05rem; }
 .fiscal-table-wrap { width: 100%; overflow-x: auto; }
-.fiscal-table { width: 100%; min-width: 690px; border-collapse: collapse; font-size: 0.77rem; }
+.fiscal-table { width: 100%; min-width: 560px; border-collapse: collapse; font-size: 0.77rem; }
 .fiscal-table th, .fiscal-table td { padding: 10px 9px; border-bottom: 1px solid #e8eff2; text-align: left; vertical-align: top; }
 .fiscal-table thead th { background: #f4fafc; color: #476571; font-size: 0.7rem; font-weight: 750; white-space: nowrap; }
 .fiscal-table tbody td { font-variant-numeric: tabular-nums; }
-.fiscal-table tbody td:nth-child(3), .fiscal-table tbody td:nth-child(4) { min-width: 120px; }
+.fiscal-table th:first-child, .fiscal-table td:first-child { width: 64px; }
+.fiscal-table th:nth-child(2) { white-space: normal; }
+.fiscal-table td:nth-child(2) { min-width: 380px; overflow-wrap: anywhere; }
+.fiscal-table th:last-child, .fiscal-table td:last-child { min-width: 130px; white-space: nowrap; }
 .fiscal-empty { margin: 10px 0 0; padding: 12px; }
 .oblio-proxy-info { margin: 0; padding: 13px; border: 1px solid var(--line); border-radius: 12px; background: #f8fbfc; line-height: 1.5; }
 .oblio-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin: 18px 0 10px; }

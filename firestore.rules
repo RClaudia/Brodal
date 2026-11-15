@@ -245,5 +245,17 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time;
       allow delete: if isOwner();
     }
+
+    match /fiscal_register_imports/{year} {
+      allow read: if isOwner();
+      allow create, update: if isOwner()
+        && request.resource.data.keys().hasOnly(["year", "rows", "importedAt"])
+        && request.resource.data.year == year
+        && year.matches("^[0-9]{4}$")
+        && request.resource.data.rows is list
+        && request.resource.data.rows.size() <= 1000
+        && request.resource.data.importedAt == request.time;
+      allow delete: if false;
+    }
   }
 }

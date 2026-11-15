@@ -356,25 +356,15 @@
             <div><span>Total Cheltuieli Deductibile</span><strong id="fiscal-total-expenses">0 RON</strong></div>
             <div class="fiscal-net-total"><span>Venit Net Anual (RON)</span><strong id="fiscal-net-income">0 RON</strong></div>
           </div>
-          <section class="fiscal-register-table-section" aria-labelledby="fiscal-income-heading">
-            <h2 id="fiscal-income-heading">Tabel 1: Venituri Brute Impozabile</h2>
+          <section class="fiscal-register-table-section" aria-labelledby="fiscal-table-heading">
+            <h2 id="fiscal-table-heading">Registrul de Evidență Fiscală</h2>
             <div class="fiscal-table-wrap">
               <table class="fiscal-table">
-                <thead><tr><th>Nr. Crt.</th><th>Data</th><th>Document (Tip/Nr.)</th><th>Explicație / Felul operațiunii</th><th>Suma (RON)</th></tr></thead>
-                <tbody id="fiscal-income-body"></tbody>
+                <thead><tr><th>Nr. crt</th><th>Elemente de calcul pentru stabilirea venitului net anual/pierderii nete anuale</th><th>Valoare (lei)</th></tr></thead>
+                <tbody id="fiscal-register-body"></tbody>
               </table>
             </div>
-            <p id="fiscal-income-empty" class="empty-state fiscal-empty" hidden>Nicio încasare clasificată ca venit brut impozabil pentru anul selectat.</p>
-          </section>
-          <section class="fiscal-register-table-section" aria-labelledby="fiscal-expense-heading">
-            <h2 id="fiscal-expense-heading">Tabel 2: Cheltuieli Deductibile</h2>
-            <div class="fiscal-table-wrap">
-              <table class="fiscal-table">
-                <thead><tr><th>Nr. Crt.</th><th>Data</th><th>Document (Tip/Nr.)</th><th>Felul cheltuielii</th><th>Valoare Totală (RON)</th><th>Deductibil Integral (RON)</th><th>Deductibil Limitat (RON)</th></tr></thead>
-                <tbody id="fiscal-expense-body"></tbody>
-              </table>
-            </div>
-            <p id="fiscal-expense-empty" class="empty-state fiscal-empty" hidden>Nicio cheltuială deductibilă clasificată pentru anul selectat.</p>
+            <p id="fiscal-register-empty" class="empty-state fiscal-empty" hidden>Nicio înregistrare fiscală pentru anul selectat.</p>
           </section>
         </section>
 
@@ -634,6 +624,11 @@
               <span><strong>Importă registrul contabil (CSV)</strong><small>Adaugă operațiuni dintr-un fișier CSV pentru anul selectat.</small></span>
               <span class="settings-action-arrow" aria-hidden="true">›</span>
             </button>
+            <button class="settings-action-card" data-settings-action="import-fiscal-register" type="button">
+              <span class="settings-action-icon" aria-hidden="true">⇧</span>
+              <span><strong>Importă Registrul de Evidență Fiscală (CSV)</strong><small>Adaugă istoricul fiscal pentru un an anterior sau pentru anul curent.</small></span>
+              <span class="settings-action-arrow" aria-hidden="true">›</span>
+            </button>
             <button class="settings-action-card" data-settings-action="open-accounting" type="button">
               <span class="settings-action-icon" aria-hidden="true">▤</span>
               <span><strong>Deschide registrul contabil</strong><small>Consultă și gestionează operațiunile contabile.</small></span>
@@ -763,6 +758,33 @@
         <div class="dialog-actions">
           <button class="button button-quiet" data-close-dialog="accounting-import-dialog" type="button">Anulează</button>
           <button id="accounting-import-button" class="button button-primary" type="submit">Importă operațiunile</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="fiscal-register-import-dialog" class="app-dialog">
+      <form id="fiscal-register-import-form" class="dialog-content">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">REGISTRU FISCAL</p>
+            <h2>Importă Registrul de Evidență Fiscală</h2>
+          </div>
+          <button class="icon-button" data-close-dialog="fiscal-register-import-dialog" type="button" aria-label="Închide">×</button>
+        </div>
+        <label>
+          Anul registrului
+          <input id="fiscal-register-import-year" name="year" type="number" min="1900" max="9999" step="1" inputmode="numeric" required>
+        </label>
+        <label>
+          Fișier CSV al Registrului de Evidență Fiscală
+          <input id="fiscal-register-import-file" name="file" type="file" accept=".csv,text/csv" required>
+        </label>
+        <p class="helper-text">Selectează CSV-ul Registrului de Evidență Fiscală cu cele trei coloane: număr curent, elemente de calcul și valoare. Sunt acceptate CSV-uri separate prin virgulă, punct și virgulă sau tab.</p>
+        <p id="fiscal-register-import-preview" class="accounting-import-preview" role="status">Alege CSV-ul exportat din Registrul de Evidență Fiscală pentru validarea rândurilor.</p>
+        <p id="fiscal-register-import-error" class="form-error" role="alert" hidden></p>
+        <div class="dialog-actions">
+          <button class="button button-quiet" data-close-dialog="fiscal-register-import-dialog" type="button">Anulează</button>
+          <button id="fiscal-register-import-button" class="button button-primary" type="submit">Importă registrul</button>
         </div>
       </form>
     </dialog>
@@ -1229,6 +1251,6 @@
     </dialog>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="./app.js?v=39"></script>
+    <script type="module" src="./app.js?v=41"></script>
   </body>
 </html>

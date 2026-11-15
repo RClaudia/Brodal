@@ -70,6 +70,10 @@ const state = {
   inventoryLoading: false,
   accountingEntries: [],
   accountingUnsubscribe: null,
+  fiscalRegisterImports: [],
+  fiscalRegisterImportsUnsubscribe: null,
+  fiscalRegisterImportValidation: null,
+  fiscalRegisterImportValidationKey: "",
   accountingLoading: false,
   accountingImportValidation: null,
   accountingImportValidationKey: "",
@@ -1041,9 +1045,10 @@ function accountingAmount(value) {
 }
 
 function accountingYears() {
-  const years = [...new Set(state.accountingEntries
-    .map((entry) => String(entry.dataOperatiunii ?? "").slice(0, 4))
-    .filter((year) => /^\d{4}$/.test(year)))];
+  const years = [...new Set([
+    ...state.accountingEntries.map((entry) => String(entry.dataOperatiunii ?? "").slice(0, 4)),
+    ...state.fiscalRegisterImports.map((entry) => String(entry.year ?? ""))
+  ].filter((year) => /^\d{4}$/.test(year)))];
   const currentYear = String(new Date().getFullYear());
   if (!years.includes(currentYear)) years.push(currentYear);
   return years.sort((a, b) => b.localeCompare(a));
@@ -1051,6 +1056,56 @@ function accountingYears() {
 
 function limitedDeductibleAmount(entry, expenseTotal) {
   return Math.min(Math.max(0, expenseTotal), Math.max(0, numberValue(entry.deductibleLimitedAmount)));
+}
+
+function fiscalRegisterRows(year) {
+  const imported = state.fiscalRegisterImports.find((item) => String(item.year) === year);
+  const rows = state.accountingEntries
+    .filter((entry) => String(entry.dataOperatiunii ?? "").slice(0, 4) === year
+      && entry.incomeFiscalType === "taxable"
+      && numberValue(entry.incasariNumerar) + numberValue(entry.incasariBanca) > 0)
+    .map((entry) => ({
+      type: "income",
+      date: String(entry.dataOperatiunii),
+      element: `Venit – ${[entry.document, entry.explicatii].filter(Boolean).join(", ")}`,
+      amount: numberValue(entry.incasariNumerar) + numberValue(entry.incasariBanca)
+    }))
+    .concat(state.accountingEntries
+    .filter((entry) => String(entry.dataOperatiunii ?? "").slice(0, 4) === year
+      && ["deductibleFull", "deductibleLimited"].includes(entry.expenseFiscalType)
+      && numberValue(entry.platiNumerar) + numberValue(entry.platiBanca) > 0)
+    .map((entry) => {
+      const total = numberValue(entry.platiNumerar) + numberValue(entry.platiBanca);
+      return {
+        type: "expense",
+        date: String(entry.dataOperatiunii),
+        element: `Cheltuială deductibilă – ${[entry.document, entry.explicatii].filter(Boolean).join(", ")}`,
+        amount: entry.expenseFiscalType === "deductibleFull"
+          ? total
+          : limitedDeductibleAmount(entry, total)
+      };
+    }));
+  const importedRows = imported?.rows ?? [
+    ...(imported?.incomes ?? []).map((entry) => ({
+      type: "income",
+      element: `Venit – ${[entry.document, entry.description].filter(Boolean).join(", ")}`,
+      amount: numberValue(entry.amount),
+      date: entry.date
+    })),
+    ...(imported?.expenses ?? []).map((entry) => ({
+      type: "expense",
+      element: `Cheltuială deductibilă – ${[entry.document, entry.description].filter(Boolean).join(", ")}`,
+      amount: numberValue(entry.deductibleFull) + numberValue(entry.deductibleLimited),
+      date: entry.date
+    }))
+  ];
+  const keys = new Set(rows.map((entry) => `${entry.type}|${entry.element.toLocaleLowerCase()}|${numberValue(entry.amount).toFixed(2)}`));
+  importedRows.forEach((entry) => {
+    const type = entry.type ?? (/^venit\s*[-–]/i.test(entry.element) ? "income" : "expense");
+    const key = `${type}|${String(entry.element).toLocaleLowerCase()}|${numberValue(entry.amount).toFixed(2)}`;
+    if (!keys.has(key)) rows.push({ ...entry, type });
+  });
+  return rows.sort((a, b) => a.date && b.date ? a.date.localeCompare(b.date) : 0);
 }
 
 function renderFiscalRegister() {
@@ -1062,52 +1117,20 @@ function renderFiscalRegister() {
   yearFilter.innerHTML = years.map((year) => `<option value="${year}">${year}</option>`).join("");
   yearFilter.value = state.accountingFiscalYear;
 
-  const entries = state.accountingEntries
-    .filter((entry) => String(entry.dataOperatiunii ?? "").slice(0, 4) === state.accountingFiscalYear)
-    .sort((a, b) => String(a.dataOperatiunii ?? "").localeCompare(String(b.dataOperatiunii ?? ""))
-      || numberValue(a.nrCrt) - numberValue(b.nrCrt));
-  const incomes = entries.filter((entry) => entry.incomeFiscalType === "taxable"
-    && numberValue(entry.incasariNumerar) + numberValue(entry.incasariBanca) > 0);
-  const expenses = entries.filter((entry) => ["deductibleFull", "deductibleLimited"].includes(entry.expenseFiscalType)
-    && numberValue(entry.platiNumerar) + numberValue(entry.platiBanca) > 0);
-  const grossIncome = incomes.reduce((total, entry) =>
-    total + numberValue(entry.incasariNumerar) + numberValue(entry.incasariBanca), 0);
-  const deductibleExpenses = expenses.reduce((total, entry) => {
-    const expenseTotal = numberValue(entry.platiNumerar) + numberValue(entry.platiBanca);
-    return total + (entry.expenseFiscalType === "deductibleFull"
-      ? expenseTotal
-      : limitedDeductibleAmount(entry, expenseTotal));
-  }, 0);
+  const rows = fiscalRegisterRows(state.accountingFiscalYear);
+  const grossIncome = rows.filter((entry) => entry.type === "income")
+    .reduce((total, entry) => total + numberValue(entry.amount), 0);
+  const deductibleExpenses = rows.filter((entry) => entry.type === "expense")
+    .reduce((total, entry) => total + numberValue(entry.amount), 0);
 
-  $("#fiscal-income-body").innerHTML = incomes.map((entry, index) => `
+  $("#fiscal-register-body").innerHTML = rows.map((entry, index) => `
     <tr>
       <td>${index + 1}</td>
-      <td>${escapeHtml(accountingDateLabel(entry.dataOperatiunii))}</td>
-      <td>${escapeHtml(entry.document)}</td>
-      <td>${escapeHtml(entry.explicatii)}</td>
-      <td>${accountingAmount(numberValue(entry.incasariNumerar) + numberValue(entry.incasariBanca))}</td>
+      <td>${escapeHtml(entry.element)}</td>
+      <td>${accountingAmount(entry.amount)}</td>
     </tr>
   `).join("");
-  $("#fiscal-expense-body").innerHTML = expenses.map((entry, index) => {
-    const total = numberValue(entry.platiNumerar) + numberValue(entry.platiBanca);
-    const deductibleFull = entry.expenseFiscalType === "deductibleFull" ? total : 0;
-    const deductibleLimited = entry.expenseFiscalType === "deductibleLimited"
-      ? limitedDeductibleAmount(entry, total)
-      : 0;
-    return `
-      <tr>
-        <td>${index + 1}</td>
-        <td>${escapeHtml(accountingDateLabel(entry.dataOperatiunii))}</td>
-        <td>${escapeHtml(entry.document)}</td>
-        <td>${escapeHtml(entry.explicatii)}</td>
-        <td>${accountingAmount(total)}</td>
-        <td>${accountingAmount(deductibleFull)}</td>
-        <td>${accountingAmount(deductibleLimited)}</td>
-      </tr>
-    `;
-  }).join("");
-  $("#fiscal-income-empty").hidden = incomes.length > 0;
-  $("#fiscal-expense-empty").hidden = expenses.length > 0;
+  $("#fiscal-register-empty").hidden = rows.length > 0;
   $("#fiscal-total-income").textContent = accountingAmount(grossIncome);
   $("#fiscal-total-expenses").textContent = accountingAmount(deductibleExpenses);
   $("#fiscal-net-income").textContent = accountingAmount(grossIncome - deductibleExpenses);
@@ -1233,6 +1256,17 @@ function subscribeToAccountingEntries() {
   });
 }
 
+function subscribeToFiscalRegisterImports() {
+  state.fiscalRegisterImportsUnsubscribe?.();
+  state.fiscalRegisterImportsUnsubscribe = onSnapshot(collection(db, "fiscal_register_imports"), (snapshot) => {
+    state.fiscalRegisterImports = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+    renderAccounting();
+  }, (error) => {
+    console.error("Could not load fiscal register imports.", error);
+    toast(`Nu s-au putut încărca importurile Registrului de Evidență Fiscală: ${error.message}`, true);
+  });
+}
+
 function nextAccountingEntryNumber(operationDate) {
   const year = state.accountingYear === "all" ? String(operationDate).slice(0, 4) : state.accountingYear;
   const entries = state.accountingEntries.filter((entry) =>
@@ -1276,6 +1310,93 @@ function openAccountingImportDialog() {
   $("#accounting-import-dialog").showModal();
 }
 
+function openFiscalRegisterImportDialog() {
+  const form = $("#fiscal-register-import-form");
+  form.reset();
+  $("#fiscal-register-import-year").value = state.accountingFiscalYear;
+  $("#fiscal-register-import-preview").textContent = "Alege CSV-ul exportat din Registrul de Evidență Fiscală pentru validarea rândurilor.";
+  clearError($("#fiscal-register-import-error"));
+  state.fiscalRegisterImportValidation = null;
+  state.fiscalRegisterImportValidationKey = "";
+  $("#fiscal-register-import-dialog").showModal();
+}
+
+function fiscalRegisterImportKey(file, year) {
+  return `${file.name}:${file.size}:${file.lastModified}:${year}`;
+}
+
+async function previewFiscalRegisterImport() {
+  const file = $("#fiscal-register-import-file").files?.[0];
+  const year = $("#fiscal-register-import-year").value.trim();
+  state.fiscalRegisterImportValidation = null;
+  state.fiscalRegisterImportValidationKey = "";
+  clearError($("#fiscal-register-import-error"));
+  if (!file) {
+    $("#fiscal-register-import-preview").textContent = "Alege CSV-ul exportat din Registrul de Evidență Fiscală pentru validarea rândurilor.";
+    return;
+  }
+  try {
+    const imported = fiscalRegisterImportFromCsv(await file.text(), year);
+    state.fiscalRegisterImportValidation = imported;
+    state.fiscalRegisterImportValidationKey = fiscalRegisterImportKey(file, year);
+    const existing = state.fiscalRegisterImports.some((item) => String(item.year) === imported.year);
+    $("#fiscal-register-import-preview").textContent = `CSV valid: ${imported.rows.length} înregistrări pentru anul ${imported.year}. ${existing ? "Importul existent pentru acest an va fi înlocuit." : "Datele vor fi adăugate ca istoric."} Înregistrările identice din jurnal nu vor fi dublate.`;
+  } catch (error) {
+    $("#fiscal-register-import-preview").textContent = "";
+    showError($("#fiscal-register-import-error"), error.message);
+  }
+}
+
+async function handleFiscalRegisterImportSubmit(event) {
+  event.preventDefault();
+  const button = $("#fiscal-register-import-button");
+  const errorElement = $("#fiscal-register-import-error");
+  clearError(errorElement);
+  const file = $("#fiscal-register-import-file").files?.[0];
+  const year = $("#fiscal-register-import-year").value.trim();
+  if (!file) {
+    showError(errorElement, "Alege fișierul CSV al Registrului de Evidență Fiscală.");
+    return;
+  }
+  const key = fiscalRegisterImportKey(file, year);
+  let imported = state.fiscalRegisterImportValidationKey === key ? state.fiscalRegisterImportValidation : null;
+  try {
+    if (!imported) imported = fiscalRegisterImportFromCsv(await file.text(), year);
+    if (!navigator.onLine) throw new Error("Conectează-te la internet înainte de a importa Registrul de Evidență Fiscală.");
+    const payload = {
+      year: imported.year,
+      rows: imported.rows
+    };
+    if (new TextEncoder().encode(JSON.stringify(payload)).length > 700_000) {
+      throw new Error("Datele CSV sunt prea mari pentru a fi salvate în siguranță. Împarte registrul în fișiere mai mici.");
+    }
+    const alreadyImported = state.fiscalRegisterImports.some((item) => String(item.year) === imported.year);
+    const replacementNotice = alreadyImported
+      ? "Acest import va înlocui datele istorice importate anterior pentru acel an."
+      : "Acest import va adăuga date istorice pentru an.";
+    if (!window.confirm(`Importă ${imported.rows.length} înregistrări din Registrul de Evidență Fiscală pentru anul ${imported.year}? ${replacementNotice} Înregistrările din jurnal rămân nemodificate.`)) return;
+
+    button.disabled = true;
+    await setDoc(doc(db, "fiscal_register_imports", imported.year), {
+      ...payload,
+      importedAt: serverTimestamp()
+    });
+    state.fiscalRegisterImports = [
+      ...state.fiscalRegisterImports.filter((item) => String(item.year) !== imported.year),
+      payload
+    ];
+    state.accountingFiscalYear = imported.year;
+    $("#fiscal-register-import-dialog").close();
+    toast(`Registrul de Evidență Fiscală pentru ${imported.year} a fost importat.`);
+    renderAccounting();
+  } catch (error) {
+    console.error("Could not import fiscal register CSV.", error);
+    showError(errorElement, error.message);
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function accountingImportKey(file, year) {
   return `${file.name}:${file.size}:${file.lastModified}:${year}`;
 }
@@ -1308,6 +1429,71 @@ function parseAccountingImportAmount(value, fieldName, rowNumber) {
   const amount = Number(normalized.replace(",", "."));
   if (!Number.isFinite(amount)) throw new Error(`Rândul ${rowNumber}: ${fieldName} nu este un număr valid.`);
   return amount;
+}
+
+function fiscalRegisterCsvDelimiter(text) {
+  const counts = { ",": 0, ";": 0, "\t": 0 };
+  let insideQuotes = false;
+  for (const character of text.replace(/^\uFEFF/, "")) {
+    if (character === '"') insideQuotes = !insideQuotes;
+    else if (!insideQuotes && character === "\n") {
+      if (Object.values(counts).some((count) => count > 0)) break;
+    } else if (!insideQuotes && character in counts) counts[character] += 1;
+  }
+  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+}
+
+function parseFiscalRegisterAmount(value, fieldName, rowNumber) {
+  let normalized = String(value ?? "").trim().replace(/\s|RON/gi, "");
+  if (!normalized) throw new Error(`Rândul ${rowNumber}: completează valoarea „${fieldName}”.`);
+  if (normalized.includes(",") && normalized.includes(".")) {
+    const decimalSeparator = normalized.lastIndexOf(",") > normalized.lastIndexOf(".") ? "," : ".";
+    const thousandsSeparator = decimalSeparator === "," ? "." : ",";
+    normalized = normalized.split(thousandsSeparator).join("");
+    if (decimalSeparator === ",") normalized = normalized.replace(",", ".");
+  } else if (normalized.includes(",")) {
+    normalized = normalized.replace(",", ".");
+  }
+  const amount = Number(normalized);
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw new Error(`Rândul ${rowNumber}: „${fieldName}” trebuie să fie o sumă pozitivă sau zero.`);
+  }
+  return amount;
+}
+
+function fiscalRegisterImportFromCsv(text, year) {
+  if (text.length > 700_000) throw new Error("Fișierul CSV depășește limita de 700 KB.");
+  if (!/^\d{4}$/.test(year) || Number(year) < 1900) throw new Error("Introdu un an valid pentru registrul fiscal.");
+  const rows = parseCsv(text, fiscalRegisterCsvDelimiter(text));
+  const headers = ["nrcrt", "elementedecalculpentrustabilireavenituluinetanualpierderiineteanuale", "valoarelei"];
+  const headerIndex = rows.findIndex((row) => headers.every((name) => row.map(normalizeCsvHeader).includes(name)));
+  if (headerIndex < 0) throw new Error("CSV-ul trebuie să conțină coloanele Nr. crt, Elemente de calcul și Valoare (lei).");
+  const indexes = new Map(rows[headerIndex].map((value, index) => [normalizeCsvHeader(value), index]));
+  const entries = [];
+  for (let index = headerIndex + 1; index < rows.length; index += 1) {
+    const cells = rows[index];
+    if (cells.length !== rows[headerIndex].length) {
+      throw new Error(`Rândul ${index + 1}: numărul de coloane nu corespunde antetului CSV.`);
+    }
+    const number = String(cells[indexes.get("nrcrt")] ?? "").trim();
+    const element = String(cells[indexes.get(headers[1])] ?? "").trim();
+    if (!number && !element) continue;
+    if (!/^[1-9]\d*$/.test(number)) throw new Error(`Rândul ${index + 1}: Nr. crt trebuie să fie un număr pozitiv.`);
+    const type = /^venit\s*[-–—]\s*/i.test(element) ? "income"
+      : /^cheltuial[ăa]\s+deductibil[ăa]\s*[-–—]\s*/i.test(element) ? "expense" : "";
+    if (!type) throw new Error(`Rândul ${index + 1}: elementul trebuie să înceapă cu „Venit –” sau „Cheltuială deductibilă –”.`);
+    entries.push({
+      type,
+      element,
+      amount: parseFiscalRegisterAmount(cells[indexes.get("valoarelei")], "Valoare (lei)", index + 1)
+    });
+  }
+  if (!entries.length) throw new Error("CSV-ul nu conține înregistrări pentru Registrul de Evidență Fiscală.");
+  if (entries.length > 1000) throw new Error("Fișierul poate conține cel mult 1000 de înregistrări.");
+  return {
+    year,
+    rows: entries
+  };
 }
 
 function accountingEntriesFromCsv(text, selectedYear) {
@@ -1591,49 +1777,15 @@ function exportAccountingCsv() {
 }
 
 function exportFiscalRegisterCsv() {
-  const incomes = state.accountingEntries
-    .filter((entry) => entry.incomeFiscalType === "taxable"
-      && numberValue(entry.incasariNumerar) + numberValue(entry.incasariBanca) > 0
-      && String(entry.dataOperatiunii ?? "").slice(0, 4) === state.accountingFiscalYear)
-    .sort((a, b) => String(a.dataOperatiunii ?? "").localeCompare(String(b.dataOperatiunii ?? "")));
-  const expenses = state.accountingEntries
-    .filter((entry) => ["deductibleFull", "deductibleLimited"].includes(entry.expenseFiscalType)
-      && numberValue(entry.platiNumerar) + numberValue(entry.platiBanca) > 0
-      && String(entry.dataOperatiunii ?? "").slice(0, 4) === state.accountingFiscalYear)
-    .sort((a, b) => String(a.dataOperatiunii ?? "").localeCompare(String(b.dataOperatiunii ?? "")));
+  const rows = fiscalRegisterRows(state.accountingFiscalYear);
   const quote = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
   const csvRows = [
-    ["Tabel 1: Venituri Brute Impozabile"],
-    ["Nr. Crt.", "Data", "Document (Tip/Nr.)", "Explicație / Felul operațiunii", "Suma (RON)"],
-    ...incomes.map((entry, index) => [
+    ["Nr. crt", "Elemente de calcul pentru stabilirea venitului net anual/pierderii nete anuale", "Valoare (lei)"],
+    ...rows.map((entry, index) => [
       index + 1,
-      accountingDateLabel(entry.dataOperatiunii),
-      entry.document,
-      entry.explicatii,
-      (numberValue(entry.incasariNumerar) + numberValue(entry.incasariBanca)).toFixed(2)
-    ]),
-    [],
-    ["Tabel 2: Cheltuieli Deductibile"],
-    ["Nr. Crt.", "Data", "Document (Tip/Nr.)", "Felul cheltuielii", "Valoare Totală (RON)", "Deductibil Integral (RON)", "Deductibil Limitat (RON)"],
-    ...expenses.map((entry, index) => {
-      const total = numberValue(entry.platiNumerar) + numberValue(entry.platiBanca);
-      return [
-        index + 1,
-        accountingDateLabel(entry.dataOperatiunii),
-        entry.document,
-        entry.explicatii,
-        total.toFixed(2),
-        (entry.expenseFiscalType === "deductibleFull" ? total : 0).toFixed(2),
-        (entry.expenseFiscalType === "deductibleLimited"
-          ? limitedDeductibleAmount(entry, total)
-          : 0).toFixed(2)
-      ];
-    }),
-    [],
-    ["Determinarea Venitului Net"],
-    ["Total Venit Brut (RON)", $("#fiscal-total-income").textContent],
-    ["Total Cheltuieli Deductibile (RON)", $("#fiscal-total-expenses").textContent],
-    ["Venit Net Anual (RON)", $("#fiscal-net-income").textContent]
+      entry.element,
+      numberValue(entry.amount).toFixed(2)
+    ])
   ];
   const csv = `\uFEFF${csvRows.map((row) => row.map(quote).join(",")).join("\r\n")}`;
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -2392,7 +2544,7 @@ function openImportDialog() {
   importDialog.showModal();
 }
 
-function parseCsv(text) {
+function parseCsv(text, delimiter = ",") {
   const source = text.replace(/^\uFEFF/, "");
   const rows = [];
   let row = [];
@@ -2412,7 +2564,7 @@ function parseCsv(text) {
       }
     } else if (character === '"' && field.length === 0) {
       insideQuotes = true;
-    } else if (character === ",") {
+    } else if (character === delimiter) {
       row.push(field);
       field = "";
     } else if (character === "\n" || character === "\r") {
@@ -3296,6 +3448,7 @@ function initializeAppUi() {
       openImportDialog();
     }
     if (settingsAction === "import-accounting") openAccountingImportDialog();
+    if (settingsAction === "import-fiscal-register") openFiscalRegisterImportDialog();
     if (settingsAction === "open-accounting") showPage("accounting");
     if (settingsAction === "open-items") showPage("items");
     if (settingsAction === "account") {
@@ -3478,6 +3631,9 @@ function initializeAppUi() {
   });
   $("#accounting-fiscal-export-button").addEventListener("click", exportFiscalRegisterCsv);
   $("#accounting-fiscal-print-button").addEventListener("click", printFiscalRegister);
+  $("#fiscal-register-import-form").addEventListener("submit", handleFiscalRegisterImportSubmit);
+  $("#fiscal-register-import-file").addEventListener("change", () => void previewFiscalRegisterImport());
+  $("#fiscal-register-import-year").addEventListener("input", () => void previewFiscalRegisterImport());
   $("#oblio-load-invoices-button").addEventListener("click", () => void loadOblioInvoices());
   $("#oblio-sync-paid-button").addEventListener("click", () => void syncPaidOblioInvoices());
   $("#accounting-mobile-list").addEventListener("click", onAccountingAction);
@@ -3543,7 +3699,7 @@ function initializeAppUi() {
   document.querySelectorAll("[data-close-dialog]").forEach((button) => {
     button.addEventListener("click", () => document.getElementById(button.dataset.closeDialog).close());
   });
-  [eventDialog, materialDialog, inventoryDialog, settingsDialog, importDialog, accountDialog, accountingDialog, productPickerDialog, productQuantityDialog, catalogItemDialog, categoryDialog, marketCloseDialog, pastMarketDialog].forEach((dialog) => {
+  [eventDialog, materialDialog, inventoryDialog, settingsDialog, importDialog, accountDialog, accountingDialog, productPickerDialog, productQuantityDialog, catalogItemDialog, categoryDialog, marketCloseDialog, pastMarketDialog, $("#fiscal-register-import-dialog")].forEach((dialog) => {
     dialog.addEventListener("click", (event) => {
       if (event.target === dialog) dialog.close();
     });
@@ -3569,18 +3725,21 @@ if (!isFirebaseConfigured) {
       subscribeToMaterials();
       subscribeToEvents();
       subscribeToAccountingEntries();
+      subscribeToFiscalRegisterImports();
     } else {
       state.inventoryUnsubscribe?.();
       state.catalogUnsubscribe?.();
       state.categoriesUnsubscribe?.();
       state.materialsUnsubscribe?.();
       state.accountingUnsubscribe?.();
+      state.fiscalRegisterImportsUnsubscribe?.();
       state.events = [];
       state.inventory = [];
       state.catalog = [];
       state.materials = [];
       state.categoryRecords = [];
       state.accountingEntries = [];
+      state.fiscalRegisterImports = [];
       state.accountingLoading = false;
       state.activeEventId = "";
       state.catalogMigrationStarted = false;
