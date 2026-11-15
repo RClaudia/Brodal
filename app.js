@@ -25,6 +25,7 @@ import { auth, db, isFirebaseConfigured } from "./firebase-config.js";
 import { listPaidInvoices, listRecentInvoices } from "./oblioService.js";
 
 const $ = (selector) => document.querySelector(selector);
+const configuredOblioProxyUrl = "__VITE_OBLIO_PROXY_URL__";
 const money = new Intl.NumberFormat("ro-RO", { style: "currency", currency: "RON" });
 const skuCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 const state = {
@@ -80,7 +81,7 @@ const state = {
   editingAccountingId: null,
   accountingNumberEdited: false,
   f4109StorageWarningShown: false,
-  oblioProxyUrl: "",
+  oblioProxyUrl: configuredOblioProxyUrl === "__VITE_OBLIO_PROXY_URL__" ? "" : configuredOblioProxyUrl.trim(),
   oblioInvoices: [],
   oblioInvoicesLoaded: false
 };
@@ -1678,8 +1679,20 @@ function renderOblioInvoices() {
 }
 
 function oblioBaseUrl() {
-  const inputValue = $("#oblio-proxy-url").value.trim();
-  return oblioBaseUrlFor((inputValue || state.oblioProxyUrl).replace(/\/+$/, ""));
+  const endpoint = state.oblioProxyUrl.replace(/\/+$/, "");
+  if (!endpoint) {
+    throw new Error("Proxy-ul Oblio nu este configurat. Adaugă VITE_OBLIO_PROXY_URL în GitHub Actions Variables și redeploy.");
+  }
+  let url;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    throw new Error("URL-ul proxy Oblio configurat nu este valid.");
+  }
+  if (url.protocol !== "https:" || url.search || url.hash || url.username || url.password) {
+    throw new Error("URL-ul proxy Oblio configurat nu este un endpoint HTTPS valid.");
+  }
+  return endpoint;
 }
 
 async function loadOblioInvoices() {
@@ -1697,34 +1710,6 @@ async function loadOblioInvoices() {
   } finally {
     button.disabled = false;
   }
-}
-
-function saveOblioProxyUrl() {
-  const input = $("#oblio-proxy-url");
-  try {
-    const endpoint = input.value.trim().replace(/\/+$/, "");
-    const validatedEndpoint = oblioBaseUrlFor(endpoint);
-    localStorage.setItem("brodal:oblio-proxy-url", validatedEndpoint);
-    state.oblioProxyUrl = validatedEndpoint;
-    input.value = validatedEndpoint;
-    setOblioStatus("Endpoint-ul proxy Oblio a fost salvat pe acest dispozitiv.");
-    toast("Endpoint-ul proxy Oblio a fost salvat.");
-  } catch (error) {
-    console.error("Could not save the Oblio proxy URL.", error);
-    setOblioStatus(`Endpoint-ul proxy nu a putut fi salvat: ${error.message}`, true);
-  }
-}
-
-function oblioBaseUrlFor(endpoint) {
-  const url = new URL(endpoint);
-  const isLocalhost = ["localhost", "127.0.0.1"].includes(url.hostname);
-  if (url.protocol !== "https:" && !(isLocalhost && url.protocol === "http:")) {
-    throw new Error("Endpoint-ul proxy trebuie să folosească HTTPS (HTTP este permis doar pe localhost).");
-  }
-  if (url.search || url.hash || url.username || url.password) {
-    throw new Error("Endpoint-ul proxy nu poate conține parametri, fragment URL sau date de autentificare.");
-  }
-  return endpoint;
 }
 
 async function syncPaidOblioInvoices() {
@@ -3159,14 +3144,9 @@ function onInventoryAction(event) {
 
 function initializeAppUi() {
   configureLogin();
-  try {
-    state.oblioProxyUrl = localStorage.getItem("brodal:oblio-proxy-url") ?? "";
-    $("#oblio-proxy-url").value = state.oblioProxyUrl;
-    if (state.oblioProxyUrl) setOblioStatus("Endpoint-ul proxy Oblio salvat este gata de utilizare.");
-  } catch (error) {
-    console.error("Could not read the saved Oblio proxy URL.", error);
-    setOblioStatus("Endpoint-ul proxy Oblio salvat nu a putut fi citit din stocarea locală.", true);
-  }
+  setOblioStatus(state.oblioProxyUrl
+    ? "Proxy-ul Oblio configurat pentru această aplicație este gata de utilizare."
+    : "Proxy-ul Oblio nu este configurat. Adaugă VITE_OBLIO_PROXY_URL în GitHub Actions Variables și redeploy.");
   $("#login-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     clearError($("#login-error"));
@@ -3498,7 +3478,6 @@ function initializeAppUi() {
   });
   $("#accounting-fiscal-export-button").addEventListener("click", exportFiscalRegisterCsv);
   $("#accounting-fiscal-print-button").addEventListener("click", printFiscalRegister);
-  $("#oblio-save-proxy-button").addEventListener("click", saveOblioProxyUrl);
   $("#oblio-load-invoices-button").addEventListener("click", () => void loadOblioInvoices());
   $("#oblio-sync-paid-button").addEventListener("click", () => void syncPaidOblioInvoices());
   $("#accounting-mobile-list").addEventListener("click", onAccountingAction);

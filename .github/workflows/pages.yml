@@ -1,0 +1,55 @@
+name: Deploy static site to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Configure public app endpoint
+        env:
+          VITE_OBLIO_PROXY_URL: ${{ vars.VITE_OBLIO_PROXY_URL }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          endpoint = os.environ.get("VITE_OBLIO_PROXY_URL", "").strip()
+          app_path = Path("app.js")
+          app_source = app_path.read_text(encoding="utf-8")
+          marker = '"__VITE_OBLIO_PROXY_URL__"'
+          if app_source.count(marker) != 2:
+              raise SystemExit("Expected exactly two Oblio endpoint placeholders in app.js.")
+          app_path.write_text(app_source.replace(marker, json.dumps(endpoint)), encoding="utf-8")
+          PY
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

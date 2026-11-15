@@ -377,9 +377,7 @@ button.workspace-card:hover { transform: translateY(-2px); border-color: #b7d5e1
 .fiscal-table tbody td { font-variant-numeric: tabular-nums; }
 .fiscal-table tbody td:nth-child(3), .fiscal-table tbody td:nth-child(4) { min-width: 120px; }
 .fiscal-empty { margin: 10px 0 0; padding: 12px; }
-.oblio-proxy-settings { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 10px; padding: 15px; border: 1px solid var(--line); border-radius: 13px; background: #f8fbfc; }
-.oblio-proxy-settings .helper-text { grid-column: 1 / -1; margin: 0; line-height: 1.5; }
-.oblio-proxy-settings .button { min-height: 44px; }
+.oblio-proxy-info { margin: 0; padding: 13px; border: 1px solid var(--line); border-radius: 12px; background: #f8fbfc; line-height: 1.5; }
 .oblio-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin: 18px 0 10px; }
 .oblio-actions label { width: min(100%, 180px); }
 #oblio-status { min-height: 1.4em; margin: 10px 0; }
@@ -572,8 +570,6 @@ button.workspace-card:hover { transform: translateY(-2px); border-color: #b7d5e1
   .fiscal-register-toolbar .button { flex: 1 1 auto; }
   .fiscal-register-summary { padding: 14px; }
   .fiscal-register-summary > div { font-size: 0.78rem; }
-  .oblio-proxy-settings { grid-template-columns: 1fr; padding: 12px; }
-  .oblio-proxy-settings .helper-text { grid-column: auto; }
   .oblio-actions { align-items: stretch; flex-direction: column; }
   .oblio-actions label { width: 100%; }
   .oblio-actions .button { width: 100%; }

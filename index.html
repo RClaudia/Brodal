@@ -387,13 +387,7 @@
             </div>
             <a class="button button-outline oblio-external-link" href="https://www.oblio.eu/" target="_blank" rel="noopener noreferrer">Deschide Oblio ↗</a>
           </div>
-          <div class="oblio-proxy-settings">
-            <label for="oblio-proxy-url">URL proxy serverless
-              <input id="oblio-proxy-url" type="url" inputmode="url" placeholder="https://api.exemplu.ro/api/oblio">
-            </label>
-            <button id="oblio-save-proxy-button" class="button button-outline" type="button">Salvează endpoint-ul</button>
-            <p class="helper-text">Proxy-ul trebuie să gestioneze OAuth2 (POST /api/authorize/token) și să ofere rutele GET /invoices?limit=20 și GET /invoices?status=paid conform documentației din README. Folosește HTTPS.</p>
-          </div>
+          <p class="helper-text oblio-proxy-info">Conexiunea folosește un proxy serverless securizat configurat la publicare. Datele de autentificare Oblio nu sunt incluse în aplicația din browser.</p>
           <div class="oblio-actions">
             <button id="oblio-load-invoices-button" class="button button-primary" type="button">Încarcă facturile recente</button>
             <label>Înregistrează încasările în
@@ -404,7 +398,7 @@
             </label>
             <button id="oblio-sync-paid-button" class="button button-outline" type="button">Sincronizează facturile achitate în registru</button>
           </div>
-          <p id="oblio-status" class="helper-text" role="status">Configurează endpoint-ul proxy pentru a încărca facturile.</p>
+          <p id="oblio-status" class="helper-text" role="status">Se verifică configurarea proxy-ului…</p>
           <div id="oblio-invoices-empty" class="empty-state">Facturile recente vor apărea aici după încărcare.</div>
           <div id="oblio-invoices-table-wrap" class="fiscal-table-wrap" hidden>
             <table class="fiscal-table oblio-invoices-table">
@@ -1235,6 +1229,6 @@
     </dialog>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="./app.js?v=34"></script>
+    <script type="module" src="./app.js?v=36"></script>
   </body>
 </html>
