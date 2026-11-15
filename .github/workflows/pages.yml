@@ -57,8 +57,8 @@ jobs:
           app_path = Path("app.js")
           app_source = app_path.read_text(encoding="utf-8")
           marker = '"__VITE_OBLIO_PROXY_URL__"'
-          if app_source.count(marker) != 2:
-              raise SystemExit("Expected exactly two Oblio endpoint placeholders in app.js.")
+          if app_source.count(marker) != 1:
+              raise SystemExit("Expected exactly one Oblio endpoint placeholder in app.js.")
           app_path.write_text(app_source.replace(marker, json.dumps(endpoint)), encoding="utf-8")
           PY
 

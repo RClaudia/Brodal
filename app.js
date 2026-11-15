@@ -81,7 +81,7 @@ const state = {
   editingAccountingId: null,
   accountingNumberEdited: false,
   f4109StorageWarningShown: false,
-  oblioProxyUrl: configuredOblioProxyUrl === "__VITE_OBLIO_PROXY_URL__" ? "" : configuredOblioProxyUrl.trim(),
+  oblioProxyUrl: configuredOblioProxyUrl.startsWith("__") ? "" : configuredOblioProxyUrl.trim(),
   oblioInvoices: [],
   oblioInvoicesLoaded: false
 };

@@ -1,9 +1,9 @@
-const CACHE_NAME = "brodal-inventory-v37";
+const CACHE_NAME = "brodal-inventory-v38";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css",
-  "./app.js?v=37",
+  "./app.js?v=38",
   "./oblioService.js",
   "./firebase-config.js",
   "./manifest.json",
