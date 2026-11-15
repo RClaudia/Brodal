@@ -332,6 +332,18 @@ button.workspace-card:hover { transform: translateY(-2px); border-color: #b7d5e1
 .accounting-income strong, .income-group legend { color: var(--green); }
 .accounting-expense strong, .expense-group legend { color: #a75442; }
 .accounting-section { padding: 21px; }
+.f4109-reminder { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin: 0 0 15px; padding: 15px 18px; border: 1px solid #efd49a; border-radius: 14px; background: var(--amber-pale); color: #654710; }
+.f4109-reminder-copy { min-width: 0; }
+.f4109-reminder-copy strong { display: block; margin-bottom: 4px; font-size: 0.9rem; }
+.f4109-reminder-copy p { margin: 0; font-size: 0.82rem; line-height: 1.5; }
+.f4109-reminder-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; }
+.f4109-reminder-actions .button { min-height: 38px; font-size: 0.76rem; }
+.accounting-subnav { margin-bottom: 22px; }
+.accounting-workspace-card[aria-current="page"] { border-color: #9dc9d9; background: #f8fcfe; box-shadow: 0 0 0 2px rgba(47, 123, 157, 0.1); }
+.accounting-journal-icon { background: #f8efe2; color: #96642b; }
+.accounting-fiscal-icon { background: #e7f5ed; color: #2f8061; }
+.accounting-oblio-icon { background: #e7f4f9; color: #246681; }
+.accounting-f4109-icon { background: #fff3d8; color: #a9680c; }
 .accounting-filters { display: grid; grid-template-columns: minmax(130px, 0.65fr) minmax(150px, 0.8fr) minmax(220px, 1.7fr) auto; align-items: end; gap: 12px; margin-bottom: 18px; }
 .accounting-filters > label { min-width: 0; }
 .accounting-filters > .button { min-height: 44px; }
@@ -345,6 +357,38 @@ button.workspace-card:hover { transform: translateY(-2px); border-color: #b7d5e1
 .accounting-table td:nth-child(n+7):nth-child(-n+8), .accounting-mobile-expense { color: #a75442; }
 .accounting-table td:nth-child(4) { min-width: 180px; white-space: normal; }
 .accounting-table tfoot td { border-top: 2px solid #cddfe6; border-bottom: 0; background: #f4fafc; font-weight: 800; white-space: nowrap; }
+.accounting-fiscal-classification { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: #f8fbfc; }
+.accounting-fiscal-classification .form-section-title, .accounting-fiscal-classification .helper-text { grid-column: 1 / -1; margin: 0; }
+.accounting-fiscal-classification .form-section-title { font-size: 0.88rem; font-weight: 800; }
+.fiscal-register-toolbar { display: flex; align-items: end; gap: 10px; margin-bottom: 13px; }
+.fiscal-register-toolbar label { width: min(100%, 220px); }
+.fiscal-register-note { margin: 0 0 17px; line-height: 1.5; }
+.fiscal-register-summary { display: grid; gap: 10px; margin-bottom: 22px; padding: 18px; border: 1px solid #cfe2e9; border-radius: 14px; background: #f4fafc; }
+.fiscal-register-summary > .eyebrow { margin: 0 0 2px; }
+.fiscal-register-summary > div { display: flex; justify-content: space-between; gap: 12px; font-size: 0.88rem; }
+.fiscal-register-summary strong { text-align: right; font-variant-numeric: tabular-nums; }
+.fiscal-register-summary .fiscal-net-total { padding-top: 10px; border-top: 1px solid #cddfe6; font-size: 1rem; font-weight: 800; }
+.fiscal-register-table-section { margin-top: 22px; }
+.fiscal-register-table-section h2 { margin: 0 0 10px; font-size: 1.05rem; }
+.fiscal-table-wrap { width: 100%; overflow-x: auto; }
+.fiscal-table { width: 100%; min-width: 690px; border-collapse: collapse; font-size: 0.77rem; }
+.fiscal-table th, .fiscal-table td { padding: 10px 9px; border-bottom: 1px solid #e8eff2; text-align: left; vertical-align: top; }
+.fiscal-table thead th { background: #f4fafc; color: #476571; font-size: 0.7rem; font-weight: 750; white-space: nowrap; }
+.fiscal-table tbody td { font-variant-numeric: tabular-nums; }
+.fiscal-table tbody td:nth-child(3), .fiscal-table tbody td:nth-child(4) { min-width: 120px; }
+.fiscal-empty { margin: 10px 0 0; padding: 12px; }
+.oblio-proxy-settings { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 10px; padding: 15px; border: 1px solid var(--line); border-radius: 13px; background: #f8fbfc; }
+.oblio-proxy-settings .helper-text { grid-column: 1 / -1; margin: 0; line-height: 1.5; }
+.oblio-proxy-settings .button { min-height: 44px; }
+.oblio-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin: 18px 0 10px; }
+.oblio-actions label { width: min(100%, 180px); }
+#oblio-status { min-height: 1.4em; margin: 10px 0; }
+#oblio-status.is-error { color: var(--red); }
+.oblio-invoices-table { min-width: 650px; }
+.f4109-page h1 { margin: 0 0 12px; font-size: clamp(1.6rem, 3vw, 2.1rem); }
+.f4109-explanation { max-width: 700px; margin: 0 0 20px; color: #526771; font-size: 1rem; line-height: 1.65; }
+.f4109-external-link { min-height: 48px; }
+.f4109-page > .helper-text { margin-top: 14px; }
 .market-history-filters { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
 .market-history-filters label { width: min(100%, 220px); }
 .market-history-filters p { margin: 0 0 10px; color: var(--red); font-size: 0.8rem; }
@@ -502,6 +546,9 @@ button.workspace-card:hover { transform: translateY(-2px); border-color: #b7d5e1
   .workspace-card-copy strong { font-size: 0.95rem; }
   .workspace-card-copy small { font-size: 0.75rem; }
   .workspace-card-placeholder { min-height: 90px; }
+  .f4109-reminder { align-items: stretch; flex-direction: column; gap: 10px; padding: 13px; }
+  .f4109-reminder-actions { flex-wrap: wrap; }
+  .f4109-reminder-actions .button { flex: 1 1 auto; }
   .accounting-heading { align-items: flex-start; }
   .accounting-desktop-add { display: none; }
   .accounting-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 13px; }
@@ -518,6 +565,20 @@ button.workspace-card:hover { transform: translateY(-2px); border-color: #b7d5e1
   .accounting-mobile-add { position: fixed; z-index: 4; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); display: inline-flex; min-height: 48px; padding: 11px 16px; border-radius: 999px; box-shadow: 0 7px 22px rgba(34, 86, 108, 0.24); }
   .accounting-form .form-row { grid-template-columns: 1fr 1fr; gap: 9px; }
   .accounting-money-group { padding: 11px; }
+  .accounting-fiscal-classification { grid-template-columns: 1fr; gap: 10px; padding: 11px; }
+  .accounting-fiscal-classification .form-section-title, .accounting-fiscal-classification .helper-text { grid-column: auto; }
+  .fiscal-register-toolbar { flex-wrap: wrap; }
+  .fiscal-register-toolbar label { flex: 1 1 100%; }
+  .fiscal-register-toolbar .button { flex: 1 1 auto; }
+  .fiscal-register-summary { padding: 14px; }
+  .fiscal-register-summary > div { font-size: 0.78rem; }
+  .oblio-proxy-settings { grid-template-columns: 1fr; padding: 12px; }
+  .oblio-proxy-settings .helper-text { grid-column: auto; }
+  .oblio-actions { align-items: stretch; flex-direction: column; }
+  .oblio-actions label { width: 100%; }
+  .oblio-actions .button { width: 100%; }
+  .oblio-external-link { white-space: normal !important; }
+  .f4109-page { padding-bottom: 24px; }
   .accounting-mobile-amounts { gap: 7px; }
   .settings-action-card, .settings-info-card { gap: 11px; padding: 13px; }
   .settings-action-icon { width: 36px; height: 36px; border-radius: 10px; }
@@ -627,4 +688,16 @@ button.workspace-card:hover { transform: translateY(-2px); border-color: #b7d5e1
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+
+@media print {
+  body.print-fiscal-register { min-width: 0; background: #fff; }
+  body.print-fiscal-register #app-shell > :not(#accounting-page) { display: none !important; }
+  body.print-fiscal-register #accounting-page > :not(#accounting-fiscal-view) { display: none !important; }
+  body.print-fiscal-register #accounting-page { display: block !important; padding: 0; }
+  body.print-fiscal-register #accounting-fiscal-view { display: block !important; padding: 0; border: 0; box-shadow: none; }
+  body.print-fiscal-register .fiscal-table-wrap { overflow: visible; }
+  body.print-fiscal-register .fiscal-table { min-width: 0; font-size: 9pt; }
+  body.print-fiscal-register .fiscal-register-summary { break-inside: avoid; }
+  body.print-fiscal-register .fiscal-register-table-section { break-inside: avoid; }
 }

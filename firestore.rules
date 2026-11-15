@@ -191,7 +191,8 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly([
           "nrCrt", "dataOperatiunii", "document", "explicatii",
           "incasariNumerar", "incasariBanca", "platiNumerar", "platiBanca",
-          "createdAt", "updatedAt"
+          "incomeFiscalType", "expenseFiscalType", "deductibleLimitedAmount",
+          "sourceOblioInvoiceId", "createdAt", "updatedAt"
         ])
         && request.resource.data.nrCrt is int
         && request.resource.data.nrCrt > 0
@@ -203,13 +204,23 @@ service cloud.firestore {
         && request.resource.data.incasariBanca is number
         && request.resource.data.platiNumerar is number
         && request.resource.data.platiBanca is number
+        && (!("incomeFiscalType" in request.resource.data)
+          || request.resource.data.incomeFiscalType in ["taxable", "nonTaxable", "ownerContribution", "unclassified"])
+        && (!("expenseFiscalType" in request.resource.data)
+          || request.resource.data.expenseFiscalType in ["deductibleFull", "deductibleLimited", "nonDeductible", "personal", "unclassified"])
+        && (!("deductibleLimitedAmount" in request.resource.data)
+          || (request.resource.data.deductibleLimitedAmount is number
+            && request.resource.data.deductibleLimitedAmount >= 0))
+        && (!("sourceOblioInvoiceId" in request.resource.data)
+          || request.resource.data.sourceOblioInvoiceId is string)
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
       allow update: if isOwner()
         && request.resource.data.keys().hasOnly([
           "nrCrt", "dataOperatiunii", "document", "explicatii",
           "incasariNumerar", "incasariBanca", "platiNumerar", "platiBanca",
-          "createdAt", "updatedAt"
+          "incomeFiscalType", "expenseFiscalType", "deductibleLimitedAmount",
+          "sourceOblioInvoiceId", "createdAt", "updatedAt"
         ])
         && request.resource.data.nrCrt is int
         && request.resource.data.nrCrt > 0
@@ -221,6 +232,15 @@ service cloud.firestore {
         && request.resource.data.incasariBanca is number
         && request.resource.data.platiNumerar is number
         && request.resource.data.platiBanca is number
+        && (!("incomeFiscalType" in request.resource.data)
+          || request.resource.data.incomeFiscalType in ["taxable", "nonTaxable", "ownerContribution", "unclassified"])
+        && (!("expenseFiscalType" in request.resource.data)
+          || request.resource.data.expenseFiscalType in ["deductibleFull", "deductibleLimited", "nonDeductible", "personal", "unclassified"])
+        && (!("deductibleLimitedAmount" in request.resource.data)
+          || (request.resource.data.deductibleLimitedAmount is number
+            && request.resource.data.deductibleLimitedAmount >= 0))
+        && (!("sourceOblioInvoiceId" in request.resource.data)
+          || request.resource.data.sourceOblioInvoiceId is string)
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.updatedAt == request.time;
       allow delete: if isOwner();

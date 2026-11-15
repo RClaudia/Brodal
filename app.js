@@ -11,6 +11,7 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  getDoc,
   getDocsFromServer,
   onSnapshot,
   query,
@@ -21,6 +22,7 @@ import {
   writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { auth, db, isFirebaseConfigured } from "./firebase-config.js";
+import { listPaidInvoices, listRecentInvoices } from "./oblioService.js";
 
 const $ = (selector) => document.querySelector(selector);
 const money = new Intl.NumberFormat("ro-RO", { style: "currency", currency: "RON" });
@@ -71,10 +73,16 @@ const state = {
   accountingImportValidation: null,
   accountingImportValidationKey: "",
   accountingYear: String(new Date().getFullYear()),
+  accountingFiscalYear: String(new Date().getFullYear()),
+  accountingView: "journal",
   accountingMonth: "all",
   accountingSearch: "",
   editingAccountingId: null,
-  accountingNumberEdited: false
+  accountingNumberEdited: false,
+  f4109StorageWarningShown: false,
+  oblioProxyUrl: "",
+  oblioInvoices: [],
+  oblioInvoicesLoaded: false
 };
 
 const loginScreen = $("#login-screen");
@@ -858,12 +866,20 @@ function showPage(name) {
       : "false");
   });
   if (name === "items") renderCatalog();
-  if (name === "accounting") renderAccounting();
+  if (name === "accounting") setAccountingView("home");
   if (name === "market-history") void loadMarketHistoryInventoryTotals();
   if (name === "materials") renderMaterials();
 }
 
 function goBackToParentPage() {
+  if (state.currentPage === "accounting") {
+    if (state.accountingView !== "home") {
+      setAccountingView("home");
+      return;
+    }
+    showPage("hub");
+    return;
+  }
   const parentPages = {
     "inventory-home": "hub",
     dashboard: "inventory-home",
@@ -1023,7 +1039,123 @@ function accountingAmount(value) {
   return money.format(numberValue(value));
 }
 
+function accountingYears() {
+  const years = [...new Set(state.accountingEntries
+    .map((entry) => String(entry.dataOperatiunii ?? "").slice(0, 4))
+    .filter((year) => /^\d{4}$/.test(year)))];
+  const currentYear = String(new Date().getFullYear());
+  if (!years.includes(currentYear)) years.push(currentYear);
+  return years.sort((a, b) => b.localeCompare(a));
+}
+
+function limitedDeductibleAmount(entry, expenseTotal) {
+  return Math.min(Math.max(0, expenseTotal), Math.max(0, numberValue(entry.deductibleLimitedAmount)));
+}
+
+function renderFiscalRegister() {
+  const yearFilter = $("#accounting-fiscal-year-filter");
+  const years = accountingYears();
+  if (!years.includes(state.accountingFiscalYear)) {
+    state.accountingFiscalYear = String(new Date().getFullYear());
+  }
+  yearFilter.innerHTML = years.map((year) => `<option value="${year}">${year}</option>`).join("");
+  yearFilter.value = state.accountingFiscalYear;
+
+  const entries = state.accountingEntries
+    .filter((entry) => String(entry.dataOperatiunii ?? "").slice(0, 4) === state.accountingFiscalYear)
+    .sort((a, b) => String(a.dataOperatiunii ?? "").localeCompare(String(b.dataOperatiunii ?? ""))
+      || numberValue(a.nrCrt) - numberValue(b.nrCrt));
+  const incomes = entries.filter((entry) => entry.incomeFiscalType === "taxable"
+    && numberValue(entry.incasariNumerar) + numberValue(entry.incasariBanca) > 0);
+  const expenses = entries.filter((entry) => ["deductibleFull", "deductibleLimited"].includes(entry.expenseFiscalType)
+    && numberValue(entry.platiNumerar) + numberValue(entry.platiBanca) > 0);
+  const grossIncome = incomes.reduce((total, entry) =>
+    total + numberValue(entry.incasariNumerar) + numberValue(entry.incasariBanca), 0);
+  const deductibleExpenses = expenses.reduce((total, entry) => {
+    const expenseTotal = numberValue(entry.platiNumerar) + numberValue(entry.platiBanca);
+    return total + (entry.expenseFiscalType === "deductibleFull"
+      ? expenseTotal
+      : limitedDeductibleAmount(entry, expenseTotal));
+  }, 0);
+
+  $("#fiscal-income-body").innerHTML = incomes.map((entry, index) => `
+    <tr>
+      <td>${index + 1}</td>
+      <td>${escapeHtml(accountingDateLabel(entry.dataOperatiunii))}</td>
+      <td>${escapeHtml(entry.document)}</td>
+      <td>${escapeHtml(entry.explicatii)}</td>
+      <td>${accountingAmount(numberValue(entry.incasariNumerar) + numberValue(entry.incasariBanca))}</td>
+    </tr>
+  `).join("");
+  $("#fiscal-expense-body").innerHTML = expenses.map((entry, index) => {
+    const total = numberValue(entry.platiNumerar) + numberValue(entry.platiBanca);
+    const deductibleFull = entry.expenseFiscalType === "deductibleFull" ? total : 0;
+    const deductibleLimited = entry.expenseFiscalType === "deductibleLimited"
+      ? limitedDeductibleAmount(entry, total)
+      : 0;
+    return `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${escapeHtml(accountingDateLabel(entry.dataOperatiunii))}</td>
+        <td>${escapeHtml(entry.document)}</td>
+        <td>${escapeHtml(entry.explicatii)}</td>
+        <td>${accountingAmount(total)}</td>
+        <td>${accountingAmount(deductibleFull)}</td>
+        <td>${accountingAmount(deductibleLimited)}</td>
+      </tr>
+    `;
+  }).join("");
+  $("#fiscal-income-empty").hidden = incomes.length > 0;
+  $("#fiscal-expense-empty").hidden = expenses.length > 0;
+  $("#fiscal-total-income").textContent = accountingAmount(grossIncome);
+  $("#fiscal-total-expenses").textContent = accountingAmount(deductibleExpenses);
+  $("#fiscal-net-income").textContent = accountingAmount(grossIncome - deductibleExpenses);
+}
+
+function renderF4109Reminder() {
+  const now = new Date();
+  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const storageKey = `brodal:f4109-dismissed:${monthKey}`;
+  const reminder = $("#f4109-reminder");
+  if (now.getDate() < 1 || now.getDate() > 20) {
+    reminder.hidden = true;
+    return;
+  }
+  try {
+    reminder.hidden = localStorage.getItem(storageKey) === "true";
+  } catch (error) {
+    console.error("Could not read the F4109 reminder preference.", error);
+    reminder.hidden = false;
+    if (!state.f4109StorageWarningShown) {
+      state.f4109StorageWarningShown = true;
+      toast("Preferința de ascundere a reminderului F4109 nu a putut fi citită.", true);
+    }
+  }
+}
+
+function setAccountingView(view) {
+  if (!["home", "journal", "fiscal", "oblio", "f4109"].includes(view)) return;
+  state.accountingView = view;
+  $("#accounting-hub-heading").hidden = view !== "home";
+  $(".accounting-subnav").hidden = view !== "home";
+  document.querySelectorAll("[data-accounting-panel]").forEach((panel) => {
+    panel.hidden = panel.dataset.accountingPanel !== view;
+  });
+  document.querySelectorAll("[data-accounting-view]").forEach((button) => {
+    if (button.dataset.accountingView === view) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  });
+  if (state.currentPage === "accounting") {
+    $("#back-button").textContent = view === "home" ? "← Înapoi" : "← Contabilitate";
+  }
+  renderAccounting();
+}
+
 function renderAccounting() {
+  renderF4109Reminder();
+  document.querySelectorAll("[data-accounting-panel]").forEach((panel) => {
+    panel.hidden = panel.dataset.accountingPanel !== state.accountingView;
+  });
   renderAccountingYearFilter();
   $("#accounting-month-filter").value = state.accountingMonth;
   const entries = getFilteredAccountingEntries();
@@ -1081,6 +1213,7 @@ function renderAccounting() {
       <td></td>
     </tr>
   ` : "";
+  renderFiscalRegister();
 }
 
 function subscribeToAccountingEntries() {
@@ -1122,6 +1255,13 @@ function openAccountingDialog(entry = null) {
   ["incasariNumerar", "incasariBanca", "platiNumerar", "platiBanca"].forEach((field) => {
     accountingForm.elements[field].value = entry ? numberValue(entry[field]) : 0;
   });
+  accountingForm.elements.incomeFiscalType.value = entry
+    ? entry.incomeFiscalType ?? "unclassified"
+    : "unclassified";
+  accountingForm.elements.expenseFiscalType.value = entry?.expenseFiscalType ?? "unclassified";
+  accountingForm.elements.deductibleLimitedAmount.value = entry
+    ? numberValue(entry.deductibleLimitedAmount)
+    : 0;
   accountingDialog.showModal();
 }
 
@@ -1186,6 +1326,9 @@ function accountingEntriesFromCsv(text, selectedYear) {
   const read = (cells, column) => (cells[columns.get(column)] ?? "").trim();
   const seenNumbers = new Set();
   const warnings = [];
+  if (!columns.has("incomefiscaltype") || !columns.has("expensefiscaltype")) {
+    warnings.push("clasificările fiscale lipsesc; operațiunile importate vor fi excluse din Registrul de Evidență Fiscală până la clasificare");
+  }
   const entries = rows.map((cells, index) => {
     const rowNumber = index + 2;
     if (cells.length !== headers.length) throw new Error(`Rândul ${rowNumber}: erau așteptate ${headers.length} coloane, dar au fost găsite ${cells.length}.`);
@@ -1204,15 +1347,40 @@ function accountingEntriesFromCsv(text, selectedYear) {
     if (!explicatii) throw new Error(`Rândul ${rowNumber}: câmpul Explicatii nu poate fi gol.`);
     const document = read(cells, "document");
     if (!document) warnings.push(`înregistrarea ${nrCrt} nu are completat câmpul Document`);
+    const incomeFiscalType = columns.has("incomefiscaltype") ? read(cells, "incomefiscaltype") : "unclassified";
+    const expenseFiscalType = columns.has("expensefiscaltype") ? read(cells, "expensefiscaltype") : "unclassified";
+    if (!["taxable", "nonTaxable", "ownerContribution", "unclassified"].includes(incomeFiscalType)) {
+      throw new Error(`Rândul ${rowNumber}: Încadrarea fiscală a încasării nu este validă.`);
+    }
+    if (!["deductibleFull", "deductibleLimited", "nonDeductible", "personal", "unclassified"].includes(expenseFiscalType)) {
+      throw new Error(`Rândul ${rowNumber}: Încadrarea fiscală a plății nu este validă.`);
+    }
+    const incasariNumerar = parseAccountingImportAmount(read(cells, "incasarinumerar"), "Incasari Numerar", rowNumber);
+    const incasariBanca = parseAccountingImportAmount(read(cells, "incasaribanca"), "Incasari Banca", rowNumber);
+    const platiNumerar = parseAccountingImportAmount(read(cells, "platinumerar"), "Plati Numerar", rowNumber);
+    const platiBanca = parseAccountingImportAmount(read(cells, "platibanca"), "Plati Banca", rowNumber);
+    const deductibleLimitedAmount = columns.has("deductiblelimitedamount")
+      ? parseAccountingImportAmount(read(cells, "deductiblelimitedamount"), "Deductibil Limitat", rowNumber)
+      : 0;
+    if (expenseFiscalType === "deductibleLimited" && !columns.has("deductiblelimitedamount")) {
+      throw new Error(`Rândul ${rowNumber}: exportul clasifică plata drept deductibilă limitat, dar lipsește coloana Deductibil Limitat.`);
+    }
+    if (deductibleLimitedAmount < 0
+      || (expenseFiscalType === "deductibleLimited" && deductibleLimitedAmount > platiNumerar + platiBanca)) {
+      throw new Error(`Rândul ${rowNumber}: Deductibil Limitat trebuie să fie pozitiv și să nu depășească totalul plăților.`);
+    }
     return {
       nrCrt,
       dataOperatiunii,
       document,
       explicatii,
-      incasariNumerar: parseAccountingImportAmount(read(cells, "incasarinumerar"), "Incasari Numerar", rowNumber),
-      incasariBanca: parseAccountingImportAmount(read(cells, "incasaribanca"), "Incasari Banca", rowNumber),
-      platiNumerar: parseAccountingImportAmount(read(cells, "platinumerar"), "Plati Numerar", rowNumber),
-      platiBanca: parseAccountingImportAmount(read(cells, "platibanca"), "Plati Banca", rowNumber)
+      incasariNumerar,
+      incasariBanca,
+      platiNumerar,
+      platiBanca,
+      incomeFiscalType,
+      expenseFiscalType,
+      deductibleLimitedAmount
     };
   });
   if (!entries.length) throw new Error("Fișierul CSV nu conține operațiuni contabile.");
@@ -1329,6 +1497,20 @@ async function handleAccountingSubmit(event) {
       throw new Error("Alege o dată validă pentru operațiune.");
     }
     if (!explicatii) throw new Error("Completează câmpul Explicații.");
+    const incomeFiscalType = String(formData.get("incomeFiscalType"));
+    const expenseFiscalType = String(formData.get("expenseFiscalType"));
+    const deductibleLimitedAmount = Number(formData.get("deductibleLimitedAmount"));
+    const expenseTotal = Number(formData.get("platiNumerar")) + Number(formData.get("platiBanca"));
+    if (!["taxable", "nonTaxable", "ownerContribution", "unclassified"].includes(incomeFiscalType)) {
+      throw new Error("Alege o încadrare fiscală validă pentru încasare.");
+    }
+    if (!["deductibleFull", "deductibleLimited", "nonDeductible", "personal", "unclassified"].includes(expenseFiscalType)) {
+      throw new Error("Alege o încadrare fiscală validă pentru plată.");
+    }
+    if (!Number.isFinite(deductibleLimitedAmount) || deductibleLimitedAmount < 0
+      || (expenseFiscalType === "deductibleLimited" && deductibleLimitedAmount > expenseTotal)) {
+      throw new Error("Valoarea deductibilă limitat trebuie să fie pozitivă și să nu depășească totalul plăților.");
+    }
     const payload = {
       nrCrt,
       dataOperatiunii,
@@ -1338,6 +1520,9 @@ async function handleAccountingSubmit(event) {
       incasariBanca: Number(formData.get("incasariBanca")),
       platiNumerar: Number(formData.get("platiNumerar")),
       platiBanca: Number(formData.get("platiBanca")),
+      incomeFiscalType,
+      expenseFiscalType,
+      deductibleLimitedAmount: expenseFiscalType === "deductibleLimited" ? deductibleLimitedAmount : 0,
       updatedAt: serverTimestamp()
     };
     if (Object.values(payload).some((value) => typeof value === "number" && !Number.isFinite(value))) {
@@ -1379,7 +1564,7 @@ function onAccountingAction(event) {
 }
 
 function exportAccountingCsv() {
-  const fields = ["Nr. crt.", "Data Operatiunii", "Document", "Explicatii", "Incasari Numerar", "Incasari Banca", "Plati Numerar", "Plati Banca"];
+  const fields = ["Nr. crt.", "Data Operatiunii", "Document", "Explicatii", "Incasari Numerar", "Incasari Banca", "Plati Numerar", "Plati Banca", "incomeFiscalType", "expenseFiscalType", "deductibleLimitedAmount"];
   const quote = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
   const rows = getFilteredAccountingEntries().map((entry) => [
     entry.nrCrt,
@@ -1389,7 +1574,10 @@ function exportAccountingCsv() {
     numberValue(entry.incasariNumerar).toFixed(2),
     numberValue(entry.incasariBanca).toFixed(2),
     numberValue(entry.platiNumerar).toFixed(2),
-    numberValue(entry.platiBanca).toFixed(2)
+    numberValue(entry.platiBanca).toFixed(2),
+    entry.incomeFiscalType ?? "unclassified",
+    entry.expenseFiscalType ?? "unclassified",
+    numberValue(entry.deductibleLimitedAmount).toFixed(2)
   ]);
   const csv = `\uFEFF${[fields, ...rows].map((row) => row.map(quote).join(",")).join("\r\n")}`;
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -1399,6 +1587,223 @@ function exportAccountingCsv() {
   link.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   toast("Export CSV pregătit.");
+}
+
+function exportFiscalRegisterCsv() {
+  const incomes = state.accountingEntries
+    .filter((entry) => entry.incomeFiscalType === "taxable"
+      && numberValue(entry.incasariNumerar) + numberValue(entry.incasariBanca) > 0
+      && String(entry.dataOperatiunii ?? "").slice(0, 4) === state.accountingFiscalYear)
+    .sort((a, b) => String(a.dataOperatiunii ?? "").localeCompare(String(b.dataOperatiunii ?? "")));
+  const expenses = state.accountingEntries
+    .filter((entry) => ["deductibleFull", "deductibleLimited"].includes(entry.expenseFiscalType)
+      && numberValue(entry.platiNumerar) + numberValue(entry.platiBanca) > 0
+      && String(entry.dataOperatiunii ?? "").slice(0, 4) === state.accountingFiscalYear)
+    .sort((a, b) => String(a.dataOperatiunii ?? "").localeCompare(String(b.dataOperatiunii ?? "")));
+  const quote = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+  const csvRows = [
+    ["Tabel 1: Venituri Brute Impozabile"],
+    ["Nr. Crt.", "Data", "Document (Tip/Nr.)", "Explicație / Felul operațiunii", "Suma (RON)"],
+    ...incomes.map((entry, index) => [
+      index + 1,
+      accountingDateLabel(entry.dataOperatiunii),
+      entry.document,
+      entry.explicatii,
+      (numberValue(entry.incasariNumerar) + numberValue(entry.incasariBanca)).toFixed(2)
+    ]),
+    [],
+    ["Tabel 2: Cheltuieli Deductibile"],
+    ["Nr. Crt.", "Data", "Document (Tip/Nr.)", "Felul cheltuielii", "Valoare Totală (RON)", "Deductibil Integral (RON)", "Deductibil Limitat (RON)"],
+    ...expenses.map((entry, index) => {
+      const total = numberValue(entry.platiNumerar) + numberValue(entry.platiBanca);
+      return [
+        index + 1,
+        accountingDateLabel(entry.dataOperatiunii),
+        entry.document,
+        entry.explicatii,
+        total.toFixed(2),
+        (entry.expenseFiscalType === "deductibleFull" ? total : 0).toFixed(2),
+        (entry.expenseFiscalType === "deductibleLimited"
+          ? limitedDeductibleAmount(entry, total)
+          : 0).toFixed(2)
+      ];
+    }),
+    [],
+    ["Determinarea Venitului Net"],
+    ["Total Venit Brut (RON)", $("#fiscal-total-income").textContent],
+    ["Total Cheltuieli Deductibile (RON)", $("#fiscal-total-expenses").textContent],
+    ["Venit Net Anual (RON)", $("#fiscal-net-income").textContent]
+  ];
+  const csv = `\uFEFF${csvRows.map((row) => row.map(quote).join(",")).join("\r\n")}`;
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `registru-evidenta-fiscala-${state.accountingFiscalYear}.csv`;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast("Exportul Registrului de Evidență Fiscală este pregătit.");
+}
+
+function printFiscalRegister() {
+  document.body.classList.add("print-fiscal-register");
+  window.addEventListener("afterprint", () => document.body.classList.remove("print-fiscal-register"), { once: true });
+  window.print();
+}
+
+function setOblioStatus(message, isError = false) {
+  const status = $("#oblio-status");
+  status.textContent = message;
+  status.classList.toggle("is-error", isError);
+}
+
+function renderOblioInvoices() {
+  const empty = $("#oblio-invoices-empty");
+  const table = $("#oblio-invoices-table-wrap");
+  empty.hidden = state.oblioInvoices.length > 0;
+  table.hidden = state.oblioInvoices.length === 0;
+  if (!state.oblioInvoices.length) {
+    empty.textContent = state.oblioInvoicesLoaded
+      ? "Proxy-ul nu a returnat facturi."
+      : "Facturile recente vor apărea aici după încărcare.";
+  }
+  $("#oblio-invoices-body").innerHTML = state.oblioInvoices.map((invoice) => `
+    <tr>
+      <td>${escapeHtml(invoice.number)}</td>
+      <td>${escapeHtml(accountingDateLabel(invoice.date.slice(0, 10)) || invoice.date)}</td>
+      <td>${escapeHtml(invoice.client || "—")}</td>
+      <td>${accountingAmount(invoice.total)}</td>
+      <td>${escapeHtml(invoice.status)}</td>
+    </tr>
+  `).join("");
+}
+
+function oblioBaseUrl() {
+  const inputValue = $("#oblio-proxy-url").value.trim();
+  return oblioBaseUrlFor((inputValue || state.oblioProxyUrl).replace(/\/+$/, ""));
+}
+
+async function loadOblioInvoices() {
+  const button = $("#oblio-load-invoices-button");
+  button.disabled = true;
+  setOblioStatus("Se încarcă facturile recente…");
+  try {
+    state.oblioInvoices = await listRecentInvoices(oblioBaseUrl());
+    state.oblioInvoicesLoaded = true;
+    renderOblioInvoices();
+    setOblioStatus(`${state.oblioInvoices.length} facturi încărcate din proxy-ul Oblio.`);
+  } catch (error) {
+    console.error("Could not load Oblio invoices.", error);
+    setOblioStatus(`Facturile nu au putut fi încărcate: ${error.message}`, true);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function saveOblioProxyUrl() {
+  const input = $("#oblio-proxy-url");
+  try {
+    const endpoint = input.value.trim().replace(/\/+$/, "");
+    const validatedEndpoint = oblioBaseUrlFor(endpoint);
+    localStorage.setItem("brodal:oblio-proxy-url", validatedEndpoint);
+    state.oblioProxyUrl = validatedEndpoint;
+    input.value = validatedEndpoint;
+    setOblioStatus("Endpoint-ul proxy Oblio a fost salvat pe acest dispozitiv.");
+    toast("Endpoint-ul proxy Oblio a fost salvat.");
+  } catch (error) {
+    console.error("Could not save the Oblio proxy URL.", error);
+    setOblioStatus(`Endpoint-ul proxy nu a putut fi salvat: ${error.message}`, true);
+  }
+}
+
+function oblioBaseUrlFor(endpoint) {
+  const url = new URL(endpoint);
+  const isLocalhost = ["localhost", "127.0.0.1"].includes(url.hostname);
+  if (url.protocol !== "https:" && !(isLocalhost && url.protocol === "http:")) {
+    throw new Error("Endpoint-ul proxy trebuie să folosească HTTPS (HTTP este permis doar pe localhost).");
+  }
+  if (url.search || url.hash || url.username || url.password) {
+    throw new Error("Endpoint-ul proxy nu poate conține parametri, fragment URL sau date de autentificare.");
+  }
+  return endpoint;
+}
+
+async function syncPaidOblioInvoices() {
+  const button = $("#oblio-sync-paid-button");
+  button.disabled = true;
+  setOblioStatus("Se verifică facturile achitate…");
+  let synced = 0;
+  try {
+    const invoices = await listPaidInvoices(oblioBaseUrl());
+    const paymentChannel = $("#oblio-payment-channel").value;
+    const existingIds = new Set(state.accountingEntries
+      .map((entry) => String(entry.sourceOblioInvoiceId ?? ""))
+      .filter(Boolean));
+    const nextNumbersByYear = new Map();
+    for (const invoice of invoices) {
+      if (existingIds.has(invoice.id)) continue;
+      const entryId = `oblio-${encodeURIComponent(invoice.id)}`;
+      const entryRef = doc(db, "accounting_entries", entryId);
+      const existing = await getDoc(entryRef);
+      if (existing.exists()) {
+        existingIds.add(invoice.id);
+        continue;
+      }
+      const operationDate = invoice.date.slice(0, 10);
+      const [dateYear, dateMonth, dateDay] = operationDate.split("-").map(Number);
+      const parsedDate = new Date(Date.UTC(dateYear, dateMonth - 1, dateDay));
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(operationDate)
+        || parsedDate.getUTCFullYear() !== dateYear
+        || parsedDate.getUTCMonth() !== dateMonth - 1
+        || parsedDate.getUTCDate() !== dateDay) {
+        throw new Error(`Factura ${invoice.number} nu are o dată validă pentru înregistrare.`);
+      }
+      if (!Number.isFinite(invoice.total) || invoice.total <= 0) {
+        throw new Error(`Factura ${invoice.number} nu are o valoare achitată pozitivă.`);
+      }
+      const year = operationDate.slice(0, 4);
+      if (!nextNumbersByYear.has(year)) {
+        const maximum = state.accountingEntries
+          .filter((entry) => String(entry.dataOperatiunii ?? "").slice(0, 4) === year)
+          .reduce((highest, entry) => Math.max(highest, numberValue(entry.nrCrt)), 0);
+        nextNumbersByYear.set(year, maximum + 1);
+      }
+      const nrCrt = nextNumbersByYear.get(year);
+      nextNumbersByYear.set(year, nrCrt + 1);
+      const amountFields = paymentChannel === "numerar"
+        ? { incasariNumerar: invoice.total, incasariBanca: 0 }
+        : { incasariNumerar: 0, incasariBanca: invoice.total };
+      await setDoc(entryRef, {
+        nrCrt,
+        dataOperatiunii: operationDate,
+        document: `Factura Oblio ${invoice.number}`,
+        explicatii: `Factură achitată de ${invoice.client || "client"}`,
+        ...amountFields,
+        platiNumerar: 0,
+        platiBanca: 0,
+        incomeFiscalType: "taxable",
+        expenseFiscalType: "unclassified",
+        deductibleLimitedAmount: 0,
+        sourceOblioInvoiceId: invoice.id,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      existingIds.add(invoice.id);
+      synced += 1;
+    }
+    setOblioStatus(synced
+      ? `${synced} facturi achitate au fost adăugate în Registrul de Încasări și Plăți.`
+      : "Nu există facturi achitate noi de sincronizat.");
+    toast(synced
+      ? `${synced} facturi Oblio sincronizate în registru.`
+      : "Nu există facturi Oblio noi de sincronizat.");
+  } catch (error) {
+    console.error("Could not sync paid Oblio invoices.", error);
+    setOblioStatus(synced
+      ? `Sincronizarea s-a oprit după ${synced} facturi: ${error.message}`
+      : `Facturile achitate nu au putut fi sincronizate: ${error.message}`, true);
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function subscribeToInventory() {
@@ -2754,6 +3159,14 @@ function onInventoryAction(event) {
 
 function initializeAppUi() {
   configureLogin();
+  try {
+    state.oblioProxyUrl = localStorage.getItem("brodal:oblio-proxy-url") ?? "";
+    $("#oblio-proxy-url").value = state.oblioProxyUrl;
+    if (state.oblioProxyUrl) setOblioStatus("Endpoint-ul proxy Oblio salvat este gata de utilizare.");
+  } catch (error) {
+    console.error("Could not read the saved Oblio proxy URL.", error);
+    setOblioStatus("Endpoint-ul proxy Oblio salvat nu a putut fi citit din stocarea locală.", true);
+  }
   $("#login-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     clearError($("#login-error"));
@@ -3046,6 +3459,23 @@ function initializeAppUi() {
   $("#export-button").addEventListener("click", exportCsv);
   $("#accounting-add-button").addEventListener("click", () => openAccountingDialog());
   $("#accounting-mobile-add").addEventListener("click", () => openAccountingDialog());
+  $("#accounting-page").addEventListener("click", (event) => {
+    const viewButton = event.target.closest("[data-accounting-view]");
+    if (viewButton) setAccountingView(viewButton.dataset.accountingView);
+    const quickLink = event.target.closest("[data-accounting-view-link]");
+    if (quickLink) setAccountingView(quickLink.dataset.accountingViewLink);
+  });
+  $("#f4109-dismiss-button").addEventListener("click", () => {
+    const now = new Date();
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    try {
+      localStorage.setItem(`brodal:f4109-dismissed:${monthKey}`, "true");
+      $("#f4109-reminder").hidden = true;
+    } catch (error) {
+      console.error("Could not dismiss the F4109 reminder.", error);
+      toast("Reminderul F4109 nu a putut fi ascuns pentru luna aceasta.", true);
+    }
+  });
   $("#accounting-empty").addEventListener("click", (event) => {
     if (event.target.closest("[data-accounting-add]")) openAccountingDialog();
   });
@@ -3062,6 +3492,15 @@ function initializeAppUi() {
     renderAccounting();
   });
   $("#accounting-export-button").addEventListener("click", exportAccountingCsv);
+  $("#accounting-fiscal-year-filter").addEventListener("change", (event) => {
+    state.accountingFiscalYear = event.target.value;
+    renderFiscalRegister();
+  });
+  $("#accounting-fiscal-export-button").addEventListener("click", exportFiscalRegisterCsv);
+  $("#accounting-fiscal-print-button").addEventListener("click", printFiscalRegister);
+  $("#oblio-save-proxy-button").addEventListener("click", saveOblioProxyUrl);
+  $("#oblio-load-invoices-button").addEventListener("click", () => void loadOblioInvoices());
+  $("#oblio-sync-paid-button").addEventListener("click", () => void syncPaidOblioInvoices());
   $("#accounting-mobile-list").addEventListener("click", onAccountingAction);
   $("#accounting-table-body").addEventListener("click", onAccountingAction);
   accountingForm.addEventListener("submit", handleAccountingSubmit);

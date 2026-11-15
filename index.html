@@ -196,6 +196,55 @@
       </main>
 
       <main id="accounting-page" class="dashboard page-view" hidden>
+        <aside id="f4109-reminder" class="f4109-reminder" role="status" hidden>
+          <div class="f4109-reminder-copy">
+            <strong>Reminder fiscal</strong>
+            <p>Reminder lunar (termen 20 ale lunii): Dacă luna trecută nu ai emis niciun bon fiscal pe casa de marcat, nu uita să depui declarația F4109 pe e-Guvernare.</p>
+          </div>
+          <div class="f4109-reminder-actions">
+            <button class="button button-outline" type="button" data-accounting-view-link="f4109">Deschide F4109</button>
+            <button id="f4109-dismiss-button" class="button button-quiet" type="button">Ascunde pentru luna aceasta</button>
+          </div>
+        </aside>
+        <section id="accounting-hub-heading" class="workspace-welcome">
+          <h1>Contabilitate</h1>
+          <p class="muted">Alege secțiunea pe care dorești să o gestionezi.</p>
+        </section>
+        <section class="workspace-grid accounting-subnav" aria-label="Secțiuni de contabilitate">
+          <button class="workspace-card accounting-workspace-card" type="button" data-accounting-view="journal" aria-current="page">
+            <span class="workspace-icon accounting-journal-icon" aria-hidden="true">▤</span>
+            <span class="workspace-card-copy">
+              <strong>Registru de Încasări și Plăți</strong>
+              <small>Urmărește încasările, plățile și soldurile în RON.</small>
+            </span>
+            <span class="workspace-arrow" aria-hidden="true">›</span>
+          </button>
+          <button class="workspace-card accounting-workspace-card" type="button" data-accounting-view="fiscal">
+            <span class="workspace-icon accounting-fiscal-icon" aria-hidden="true">▧</span>
+            <span class="workspace-card-copy">
+              <strong>Registru de Evidență Fiscală</strong>
+              <small>Consultă veniturile impozabile și cheltuielile deductibile.</small>
+            </span>
+            <span class="workspace-arrow" aria-hidden="true">›</span>
+          </button>
+          <button class="workspace-card accounting-workspace-card" type="button" data-accounting-view="oblio">
+            <span class="workspace-icon accounting-oblio-icon" aria-hidden="true">▣</span>
+            <span class="workspace-card-copy">
+              <strong>Facturi Oblio</strong>
+              <small>Vezi facturile recente și sincronizează încasările achitate.</small>
+            </span>
+            <span class="workspace-arrow" aria-hidden="true">›</span>
+          </button>
+          <button class="workspace-card accounting-workspace-card" type="button" data-accounting-view="f4109">
+            <span class="workspace-icon accounting-f4109-icon" aria-hidden="true">⌑</span>
+            <span class="workspace-card-copy">
+              <strong>Declarația F4109</strong>
+              <small>Află când se depune declarația și deschide e-Guvernare.</small>
+            </span>
+            <span class="workspace-arrow" aria-hidden="true">›</span>
+          </button>
+        </section>
+        <div id="accounting-journal-view" data-accounting-panel="journal">
         <div class="page-heading accounting-heading">
           <div>
             <p class="eyebrow">CONTABILITATE</p>
@@ -283,6 +332,95 @@
           </div>
         </section>
         <button id="accounting-mobile-add" class="button button-primary accounting-mobile-add" type="button">＋ Adaugă Operațiune</button>
+        </div>
+
+        <section id="accounting-fiscal-view" class="inventory-section accounting-section" data-accounting-panel="fiscal" hidden>
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">CONTABILITATE</p>
+              <h1>Registru de Evidență Fiscală</h1>
+              <p class="muted">Venituri și cheltuieli încadrate fiscal din Registrul de Încasări și Plăți. Verifică fiecare clasificare și document justificativ.</p>
+            </div>
+          </div>
+          <div class="fiscal-register-toolbar">
+            <label>An
+              <select id="accounting-fiscal-year-filter" aria-label="An Registru de Evidență Fiscală"></select>
+            </label>
+            <button id="accounting-fiscal-export-button" class="button button-outline" type="button">Exportă CSV</button>
+            <button id="accounting-fiscal-print-button" class="button button-outline" type="button">Printează</button>
+          </div>
+          <p class="helper-text fiscal-register-note">Structură orientativă conform OMFP 3254/2017. Sumele afișate depind de clasificarea operațiunilor din registrul principal; confirmă tratamentul fiscal cu contabilul tău.</p>
+          <div class="fiscal-register-summary" aria-label="Determinarea venitului net">
+            <p class="eyebrow">DETERMINAREA VENITULUI NET</p>
+            <div><span>Total Venit Brut</span><strong id="fiscal-total-income">0 RON</strong></div>
+            <div><span>Total Cheltuieli Deductibile</span><strong id="fiscal-total-expenses">0 RON</strong></div>
+            <div class="fiscal-net-total"><span>Venit Net Anual (RON)</span><strong id="fiscal-net-income">0 RON</strong></div>
+          </div>
+          <section class="fiscal-register-table-section" aria-labelledby="fiscal-income-heading">
+            <h2 id="fiscal-income-heading">Tabel 1: Venituri Brute Impozabile</h2>
+            <div class="fiscal-table-wrap">
+              <table class="fiscal-table">
+                <thead><tr><th>Nr. Crt.</th><th>Data</th><th>Document (Tip/Nr.)</th><th>Explicație / Felul operațiunii</th><th>Suma (RON)</th></tr></thead>
+                <tbody id="fiscal-income-body"></tbody>
+              </table>
+            </div>
+            <p id="fiscal-income-empty" class="empty-state fiscal-empty" hidden>Nicio încasare clasificată ca venit brut impozabil pentru anul selectat.</p>
+          </section>
+          <section class="fiscal-register-table-section" aria-labelledby="fiscal-expense-heading">
+            <h2 id="fiscal-expense-heading">Tabel 2: Cheltuieli Deductibile</h2>
+            <div class="fiscal-table-wrap">
+              <table class="fiscal-table">
+                <thead><tr><th>Nr. Crt.</th><th>Data</th><th>Document (Tip/Nr.)</th><th>Felul cheltuielii</th><th>Valoare Totală (RON)</th><th>Deductibil Integral (RON)</th><th>Deductibil Limitat (RON)</th></tr></thead>
+                <tbody id="fiscal-expense-body"></tbody>
+              </table>
+            </div>
+            <p id="fiscal-expense-empty" class="empty-state fiscal-empty" hidden>Nicio cheltuială deductibilă clasificată pentru anul selectat.</p>
+          </section>
+        </section>
+
+        <section id="accounting-oblio-view" class="inventory-section accounting-section" data-accounting-panel="oblio" hidden>
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">CONTABILITATE</p>
+              <h1>Facturi Oblio</h1>
+              <p class="muted">Conectează aplicația printr-un proxy serverless securizat. Datele de autentificare Oblio nu se introduc și nu se păstrează în browser.</p>
+            </div>
+            <a class="button button-outline oblio-external-link" href="https://www.oblio.eu/" target="_blank" rel="noopener noreferrer">Deschide Oblio ↗</a>
+          </div>
+          <div class="oblio-proxy-settings">
+            <label for="oblio-proxy-url">URL proxy serverless
+              <input id="oblio-proxy-url" type="url" inputmode="url" placeholder="https://api.exemplu.ro/api/oblio">
+            </label>
+            <button id="oblio-save-proxy-button" class="button button-outline" type="button">Salvează endpoint-ul</button>
+            <p class="helper-text">Proxy-ul trebuie să gestioneze OAuth2 (POST /api/authorize/token) și să ofere rutele GET /invoices?limit=20 și GET /invoices?status=paid conform documentației din README. Folosește HTTPS.</p>
+          </div>
+          <div class="oblio-actions">
+            <button id="oblio-load-invoices-button" class="button button-primary" type="button">Încarcă facturile recente</button>
+            <label>Înregistrează încasările în
+              <select id="oblio-payment-channel">
+                <option value="banca">Bancă</option>
+                <option value="numerar">Numerar</option>
+              </select>
+            </label>
+            <button id="oblio-sync-paid-button" class="button button-outline" type="button">Sincronizează facturile achitate în registru</button>
+          </div>
+          <p id="oblio-status" class="helper-text" role="status">Configurează endpoint-ul proxy pentru a încărca facturile.</p>
+          <div id="oblio-invoices-empty" class="empty-state">Facturile recente vor apărea aici după încărcare.</div>
+          <div id="oblio-invoices-table-wrap" class="fiscal-table-wrap" hidden>
+            <table class="fiscal-table oblio-invoices-table">
+              <thead><tr><th>Număr</th><th>Data</th><th>Client</th><th>Total</th><th>Stare</th></tr></thead>
+              <tbody id="oblio-invoices-body"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="accounting-f4109-view" class="inventory-section accounting-section f4109-page" data-accounting-panel="f4109" hidden>
+          <p class="eyebrow">CONTABILITATE</p>
+          <h1>Declarația F4109</h1>
+          <p class="f4109-explanation">Declarația F4109 se depune numai dacă în luna precedentă nu a fost emis niciun bon fiscal prin casa de marcat. Termenul de depunere este data de 20 a lunii curente.</p>
+          <a class="button button-primary f4109-external-link" href="https://e-guvernare.ro" target="_blank" rel="noopener noreferrer">Deschide e-Guvernare ↗</a>
+          <p class="helper-text">Verifică cerințele și instrucțiunile oficiale înainte de depunere.</p>
+        </section>
       </main>
 
       <main id="dashboard-page" class="dashboard">
@@ -573,6 +711,33 @@
             <label>Plăți Bancă<input name="platiBanca" type="number" step="0.01" inputmode="decimal" value="0" required></label>
           </div>
         </fieldset>
+        <div class="accounting-fiscal-classification">
+          <p class="form-section-title">Încadrare fiscală</p>
+          <p class="helper-text">Operațiunile neclasificate sunt excluse din Registrul de Evidență Fiscală. Verifică încadrarea pe baza documentelor justificative.</p>
+          <label>
+            Încasare
+            <select name="incomeFiscalType">
+              <option value="unclassified">Neclasificat (exclus din registrul fiscal)</option>
+              <option value="taxable">Venit brut impozabil</option>
+              <option value="nonTaxable">Venit neimpozabil / transfer</option>
+              <option value="ownerContribution">Aport personal</option>
+            </select>
+          </label>
+          <label>
+            Plată
+            <select name="expenseFiscalType">
+              <option value="unclassified">Neclasificată (exclusă din registrul fiscal)</option>
+              <option value="deductibleFull">Cheltuială deductibilă integral</option>
+              <option value="deductibleLimited">Cheltuială deductibilă limitat</option>
+              <option value="nonDeductible">Cheltuială nedeductibilă</option>
+              <option value="personal">Cheltuială personală</option>
+            </select>
+          </label>
+          <label>
+            Valoare deductibilă limitat (RON)
+            <input name="deductibleLimitedAmount" type="number" min="0" step="0.01" inputmode="decimal" value="0">
+          </label>
+        </div>
         <p id="accounting-form-error" class="form-error" role="alert" hidden></p>
         <div class="dialog-actions">
           <button class="button button-quiet" data-close-dialog="accounting-dialog" type="button">Anulează</button>
@@ -1070,6 +1235,6 @@
     </dialog>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="./app.js?v=30"></script>
+    <script type="module" src="./app.js?v=34"></script>
   </body>
 </html>
