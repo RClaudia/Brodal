@@ -1,9 +1,9 @@
 {
   "id": "./",
-  "name": "Brodal Workspace",
+  "name": "Brodal — Spațiu de lucru",
   "short_name": "Brodal",
-  "description": "Manage Brodal inventory, markets, items, and accounting.",
-  "lang": "en",
+  "description": "Gestionează inventarul, târgurile, articolele și contabilitatea Brodal.",
+  "lang": "ro",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

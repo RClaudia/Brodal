@@ -136,7 +136,7 @@ function toast(message, isError = false) {
 function setConnectionStatus() {
   const status = $("#connection-status");
   const online = navigator.onLine;
-  status.textContent = online ? "Online" : "Offline";
+  status.textContent = online ? "Conectat" : "Fără conexiune";
   status.classList.toggle("is-offline", !online);
 }
 
@@ -150,7 +150,7 @@ function configureLogin() {
   const notice = $("#config-notice");
   const button = $("#login-button");
   if (!isFirebaseConfigured) {
-    notice.textContent = "Finish Firebase setup first: add your project settings to firebase-config.js, then reload this page.";
+    notice.textContent = "Configurează mai întâi Firebase: adaugă setările proiectului în firebase-config.js, apoi reîncarcă pagina.";
     notice.hidden = false;
     button.disabled = true;
   }
@@ -172,6 +172,14 @@ function eventDateRange(event) {
 
 function eventIsClosed(event) {
   return event?.status === "closed";
+}
+
+function eventTypeLabel(type) {
+  return type === "Market" ? "Târg" : "Actualizare magazin";
+}
+
+function categoryLabel(category) {
+  return ({ Brosa: "Broșă", Globulet: "Globuleț" })[category] ?? category;
 }
 
 function soldQuantityForMarket(items) {
@@ -198,12 +206,12 @@ function renderEvents() {
   }
 
   const activeEvent = state.events.find((event) => event.id === state.activeEventId);
-  $("#event-select-value").textContent = activeEvent?.name ?? "No events yet — create your first event";
+  $("#event-select-value").textContent = activeEvent?.name ?? "Nu există târguri — creează primul târg";
   $("#event-select-button").disabled = state.events.length === 0;
   $("#event-menu").innerHTML = state.events.map((event) => `
     <button class="event-menu-option" type="button" role="option" data-event-id="${escapeHtml(event.id)}" aria-selected="${event.id === state.activeEventId}">
       <span class="event-menu-name">${escapeHtml(event.name)}</span>
-      <span class="event-menu-meta">${escapeHtml(event.type)} · ${escapeHtml(eventDateRange(event))}${eventIsClosed(event) ? " · Closed" : ""}</span>
+      <span class="event-menu-meta">${eventTypeLabel(event.type)} · ${escapeHtml(eventDateRange(event))}${eventIsClosed(event) ? " · Încheiat" : ""}</span>
     </button>
   `).join("");
   if (state.events.length === 0) {
@@ -230,7 +238,8 @@ function renderActiveEvent() {
   $("#event-type").textContent = event.type;
   $("#event-name").textContent = event.name;
   $("#event-details").textContent = [eventDateRange(event), event.location, event.organizer].filter(Boolean).join(" · ");
-  $("#event-status").textContent = eventIsClosed(event) ? "Closed" : "In progress";
+  $("#event-type").textContent = eventTypeLabel(event.type);
+  $("#event-status").textContent = eventIsClosed(event) ? "Încheiat" : "În desfășurare";
   $("#event-status").classList.toggle("is-closed", eventIsClosed(event));
   $("#close-market-button").hidden = event.type !== "Market" || eventIsClosed(event);
   $("#refresh-market-total-button").hidden = event.type !== "Market" || !eventIsClosed(event);
@@ -244,7 +253,7 @@ function renderMarketHistory() {
     .filter((year) => /^\d{4}$/.test(year)))].sort((a, b) => b.localeCompare(a));
   const yearSelect = $("#market-history-year");
   const previousYear = state.marketHistoryYear;
-  yearSelect.innerHTML = `<option value="all">All years</option>${years.map((year) => `<option value="${year}">${year}</option>`).join("")}`;
+  yearSelect.innerHTML = `<option value="all">Toți anii</option>${years.map((year) => `<option value="${year}">${year}</option>`).join("")}`;
   if (state.marketHistoryYear !== "all" && !years.includes(state.marketHistoryYear)) state.marketHistoryYear = "all";
   yearSelect.value = state.marketHistoryYear;
   if (previousYear !== state.marketHistoryYear) $("#market-history-year").value = state.marketHistoryYear;
@@ -259,7 +268,7 @@ function renderMarketHistory() {
 
   $("#market-history-status").hidden = !state.marketHistoryLoading && !state.marketHistoryError;
   $("#market-history-status").textContent = state.marketHistoryError
-    || (state.marketHistoryLoading ? "Loading sold-item totals…" : "");
+    || (state.marketHistoryLoading ? "Se încarcă totalul produselor vândute…" : "");
   $("#market-history-empty").hidden = state.marketHistoryLoading || filtered.length > 0;
   const rows = [];
   [...grouped.keys()].sort((a, b) => b.localeCompare(a)).forEach((year) => {
@@ -293,7 +302,7 @@ function renderMarketHistory() {
       </tr>`);
     });
     rows.push(`<tr class="market-history-total-row">
-      <th colspan="5" scope="row">Total for ${escapeHtml(year)}</th>
+      <th colspan="5" scope="row">Total pentru ${escapeHtml(year)}</th>
       <td>${money.format(totals.cash)}</td>
       <td>${money.format(totals.bank)}</td>
       <td>${money.format(totals.income)}</td>
@@ -317,7 +326,7 @@ async function loadMarketHistoryInventoryTotals() {
     state.marketHistorySoldTotals = totals;
     state.marketHistoryHasInventoryTotals = true;
   } catch (error) {
-    state.marketHistoryError = `Could not load sold-item totals: ${error.message}`;
+    state.marketHistoryError = `Nu s-au putut încărca totalurile produselor vândute: ${error.message}`;
     console.error("Could not load market history inventory totals.", error);
     toast(state.marketHistoryError, true);
   } finally {
@@ -335,7 +344,7 @@ function subscribeToEvents() {
     },
     (error) => {
       console.error("Could not load events.", error);
-      toast(`Could not load events: ${error.message}`, true);
+      toast(`Nu s-au putut încărca târgurile: ${error.message}`, true);
     }
   );
 }
@@ -354,7 +363,7 @@ function startCatalogListeners() {
     }
   }, (error) => {
     console.error("Could not load item catalog.", error);
-    toast(`Could not load item catalog: ${error.message}`, true);
+    toast(`Nu s-a putut încărca catalogul de produse: ${error.message}`, true);
   });
 
   state.categoriesUnsubscribe = onSnapshot(collection(db, "categories"), (snapshot) => {
@@ -374,7 +383,7 @@ function startCatalogListeners() {
     renderCategoryList();
   }, (error) => {
     console.error("Could not load item categories.", error);
-    toast(`Could not load item categories: ${error.message}`, true);
+    toast(`Nu s-au putut încărca categoriile: ${error.message}`, true);
   });
 }
 
@@ -398,7 +407,7 @@ async function initializeDefaultCategories() {
     await batch.commit();
   } catch (error) {
     console.error("Could not initialize default categories.", error);
-    toast(`Could not initialize default categories: ${error.message}`, true);
+    toast(`Nu s-au putut inițializa categoriile implicite: ${error.message}`, true);
   }
 }
 
@@ -458,12 +467,12 @@ async function migrateInventoryToCatalog() {
     }
   } catch (error) {
     console.error("Could not migrate existing inventory into the item catalog.", error);
-    toast(`Could not prepare item catalog: ${error.message}`, true);
+    toast(`Nu s-a putut pregăti catalogul de produse: ${error.message}`, true);
   }
 }
 
 function renderCategoryControls() {
-  const options = state.categories.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join("");
+  const options = state.categories.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(categoryLabel(category))}</option>`).join("");
   const catalogSelection = $("#catalog-item-category").value;
   const inventorySelection = inventoryForm.elements.category.value;
   $("#catalog-item-category").innerHTML = options;
@@ -473,13 +482,13 @@ function renderCategoryControls() {
 
   const catalogFilter = $("#catalog-category-filter");
   const previousCatalogFilter = state.catalogCategory;
-  catalogFilter.innerHTML = `<option value="All">All categories</option>${options}`;
+  catalogFilter.innerHTML = `<option value="All">Toate categoriile</option>${options}`;
   if (state.categories.includes(previousCatalogFilter)) catalogFilter.value = previousCatalogFilter;
   else catalogFilter.value = "All";
 
   const pickerFilter = $("#product-picker-category");
   const previousPickerFilter = state.pickerCategory;
-  pickerFilter.innerHTML = `<option value="All">All categories</option>${options}`;
+  pickerFilter.innerHTML = `<option value="All">Toate categoriile</option>${options}`;
   if (state.categories.includes(previousPickerFilter)) pickerFilter.value = previousPickerFilter;
   else pickerFilter.value = "All";
 }
@@ -506,7 +515,7 @@ function renderCatalog() {
       <div class="catalog-card-main">
         <div class="catalog-card-title">
           <div><h2>${escapeHtml(product.name)}</h2><span class="sku-badge">${escapeHtml(product.sku)}</span></div>
-          <span class="product-card-category">${escapeHtml(product.category)}</span>
+          <span class="product-card-category">${escapeHtml(categoryLabel(product.category))}</span>
         </div>
         <strong class="catalog-price">${money.format(numberValue(product.price))}</strong>
         <div class="catalog-variant-list">${catalogVariants(product).map((variant) => `
@@ -515,11 +524,11 @@ function renderCatalog() {
             <strong>${escapeHtml(variant.color)}</strong>
           </div>
         `).join("")}</div>
-        <p class="muted catalog-note">Price changes apply to future markets only.</p>
+        <p class="muted catalog-note">Modificările de preț se aplică doar târgurilor viitoare.</p>
         <div class="catalog-card-actions">
-          <button class="button button-outline" type="button" data-catalog-action="edit" data-id="${escapeHtml(product.id)}">Edit item / price</button>
-          <button class="button button-primary" type="button" data-catalog-action="add" data-id="${escapeHtml(product.id)}" ${!state.activeEventId || eventIsClosed(state.events.find((event) => event.id === state.activeEventId)) || !missingCatalogVariants(product).length ? "disabled" : ""}>Add to current market</button>
-          <button class="button button-danger" type="button" data-catalog-action="delete" data-id="${escapeHtml(product.id)}">Remove</button>
+          <button class="button button-outline" type="button" data-catalog-action="edit" data-id="${escapeHtml(product.id)}">Editează articolul / prețul</button>
+          <button class="button button-primary" type="button" data-catalog-action="add" data-id="${escapeHtml(product.id)}" ${!state.activeEventId || eventIsClosed(state.events.find((event) => event.id === state.activeEventId)) || !missingCatalogVariants(product).length ? "disabled" : ""}>Adaugă în târgul curent</button>
+          <button class="button button-danger" type="button" data-catalog-action="delete" data-id="${escapeHtml(product.id)}">Șterge</button>
         </div>
       </div>
     </article>
@@ -575,13 +584,13 @@ function renderCatalogVariants() {
   $("#catalog-variants").innerHTML = state.catalogVariants.map((variant, index) => `
     <article class="catalog-variant-editor" data-variant-row data-variant-id="${escapeHtml(variant.id)}">
       <div class="catalog-variant-editor-top">
-        <span class="variant-index">Color ${index + 1}</span>
-        <button class="text-button danger" type="button" data-remove-variant="${escapeHtml(variant.id)}" ${state.catalogVariants.length <= 1 ? "disabled" : ""}>Remove</button>
+        <span class="variant-index">Culoarea ${index + 1}</span>
+        <button class="text-button danger" type="button" data-remove-variant="${escapeHtml(variant.id)}" ${state.catalogVariants.length <= 1 ? "disabled" : ""}>Șterge</button>
       </div>
       <div class="variant-editor-fields">
         <div class="product-thumb variant-image-preview">${imageMarkup({ imageBase64: variant.imageBase64 })}</div>
-        <label>Color name<input data-variant-color type="text" maxlength="50" value="${escapeHtml(variant.color)}" placeholder="e.g. Red background" required></label>
-        <label class="variant-photo-picker">Photo<input data-variant-image type="file" accept="image/*"><small>Optional image for this color.</small></label>
+        <label>Denumire culoare<input data-variant-color type="text" maxlength="50" value="${escapeHtml(variant.color)}" placeholder="de ex. Fundal roșu" required></label>
+        <label class="variant-photo-picker">Fotografie<input data-variant-image type="file" accept="image/*"><small>Imagine opțională pentru această culoare.</small></label>
       </div>
     </article>
   `).join("");
@@ -602,9 +611,9 @@ function renderProductPicker() {
     const closed = eventIsClosed(state.events.find((event) => event.id === state.activeEventId));
     return `<button class="picker-product" type="button" data-picker-product="${escapeHtml(product.id)}" ${alreadyAdded || closed ? "disabled" : ""}>
       <span class="product-thumb">${imageMarkup({ imageBase64: catalogVariants(product)[0]?.imageBase64 })}</span>
-      <span class="picker-product-main"><strong>${escapeHtml(product.name)}</strong><small>${escapeHtml(product.sku)} · ${escapeHtml(product.category)} · ${remaining.length} color${remaining.length === 1 ? "" : "s"} to add</small></span>
+      <span class="picker-product-main"><strong>${escapeHtml(product.name)}</strong><small>${escapeHtml(product.sku)} · ${escapeHtml(categoryLabel(product.category))} · ${remaining.length} ${remaining.length === 1 ? "culoare de adăugat" : "culori de adăugat"}</small></span>
       <span class="picker-product-price">${money.format(numberValue(product.price))}</span>
-      <span class="picker-product-action">${alreadyAdded ? "Added" : "＋"}</span>
+      <span class="picker-product-action">${alreadyAdded ? "Adăugat" : "＋"}</span>
     </button>`;
   }).join("");
   $("#product-picker-empty").hidden = products.length > 0;
@@ -618,8 +627,8 @@ function renderCategoryList() {
     return `<div class="category-list-row">
       <strong>${escapeHtml(category.name)}</strong>
       <span class="category-row-actions">
-        <button class="text-button" type="button" data-category-action="edit" data-id="${escapeHtml(category.id)}">Rename</button>
-        <button class="text-button danger" type="button" data-category-action="delete" data-id="${escapeHtml(category.id)}" ${inUse ? "disabled" : ""}>Remove</button>
+        <button class="text-button" type="button" data-category-action="edit" data-id="${escapeHtml(category.id)}">Redenumește</button>
+        <button class="text-button danger" type="button" data-category-action="delete" data-id="${escapeHtml(category.id)}" ${inUse ? "disabled" : ""}>Șterge</button>
       </span>
     </div>`;
   }).join("");
@@ -630,20 +639,24 @@ function materialQuantity(value, unit) {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits }).format(numberValue(value));
 }
 
+function materialUnitLabel(unit) {
+  return unit === "pcs" ? "buc." : String(unit ?? "pcs");
+}
+
 function materialQuantityControl(material) {
   const used = numberValue(material.usedQuantity);
   const quantity = numberValue(material.quantity);
   return `<span class="material-used-control">
-    <button class="stepper-button" type="button" data-material-action="used-minus" data-id="${escapeHtml(material.id)}" aria-label="Decrease used quantity for ${escapeHtml(material.name)}" ${used <= 0 ? "disabled" : ""}>−</button>
+    <button class="stepper-button" type="button" data-material-action="used-minus" data-id="${escapeHtml(material.id)}" aria-label="Scade cantitatea folosită pentru ${escapeHtml(material.name)}" ${used <= 0 ? "disabled" : ""}>−</button>
     <strong>${materialQuantity(used, material.unit)}</strong>
-    <button class="stepper-button" type="button" data-material-action="used-plus" data-id="${escapeHtml(material.id)}" aria-label="Increase used quantity for ${escapeHtml(material.name)}" ${used >= quantity ? "disabled" : ""}>+</button>
+    <button class="stepper-button" type="button" data-material-action="used-plus" data-id="${escapeHtml(material.id)}" aria-label="Crește cantitatea folosită pentru ${escapeHtml(material.name)}" ${used >= quantity ? "disabled" : ""}>+</button>
   </span>`;
 }
 
 function materialActions(material) {
   return `<span class="row-actions">
-    <button class="text-button" type="button" data-material-action="edit" data-id="${escapeHtml(material.id)}">Edit</button>
-    <button class="text-button danger" type="button" data-material-action="delete" data-id="${escapeHtml(material.id)}">Delete</button>
+    <button class="text-button" type="button" data-material-action="edit" data-id="${escapeHtml(material.id)}">Editează</button>
+    <button class="text-button danger" type="button" data-material-action="delete" data-id="${escapeHtml(material.id)}">Șterge</button>
   </span>`;
 }
 
@@ -656,33 +669,33 @@ function renderMaterials() {
   ).sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? ""), undefined, { sensitivity: "base" }));
   $("#materials-loading").hidden = !state.materialsLoading;
   $("#materials-empty").hidden = state.materialsLoading || filtered.length > 0;
-  $("#materials-empty-title").textContent = state.materials.length ? "No matching materials" : "Your materials list starts here";
+  $("#materials-empty-title").textContent = state.materials.length ? "Nu s-au găsit materiale" : "Lista ta de materiale începe aici";
   $("#materials-empty-description").textContent = state.materials.length
-    ? "Try another material name or distributor."
-    : "Add materials to keep their quantities and usage together.";
+    ? "Încearcă altă denumire de material sau alt distribuitor."
+    : "Adaugă materiale pentru a urmări cantitățile și consumul.";
   $("#materials-empty-add-button").hidden = state.materials.length > 0;
   $(".materials-table-wrap").hidden = state.materialsLoading || filtered.length === 0;
   $("#materials-mobile-list").innerHTML = filtered.map((material) => {
     const remaining = Math.max(0, numberValue(material.quantity) - numberValue(material.usedQuantity));
-    const unit = String(material.unit ?? "pcs");
+    const unit = materialUnitLabel(material.unit);
     const totalPrice = numberValue(material.price) * numberValue(material.quantity);
     return `<article class="materials-mobile-card">
       <div class="materials-mobile-card-heading">
-        <div><h2>${escapeHtml(material.name)}</h2><p>${escapeHtml(material.distributor || "No distributor")}</p></div>
+        <div><h2>${escapeHtml(material.name)}</h2><p>${escapeHtml(material.distributor || "Fără distribuitor")}</p></div>
         <strong>${money.format(numberValue(material.price))}<small> / ${escapeHtml(unit)}</small></strong>
       </div>
       <div class="materials-mobile-quantities">
-        <span>Total price <strong>${money.format(totalPrice)}</strong></span>
-        <span>Quantity <strong>${materialQuantity(material.quantity, unit)} ${escapeHtml(unit)}</strong></span>
-        <span>Used ${materialQuantityControl(material)}</span>
-        <span>Remaining <strong>${materialQuantity(remaining, unit)} ${escapeHtml(unit)}</strong></span>
+        <span>Preț total <strong>${money.format(totalPrice)}</strong></span>
+        <span>Cantitate <strong>${materialQuantity(material.quantity, unit)} ${escapeHtml(unit)}</strong></span>
+        <span>Folosită ${materialQuantityControl(material)}</span>
+        <span>Disponibil <strong>${materialQuantity(remaining, unit)} ${escapeHtml(unit)}</strong></span>
       </div>
       <div class="materials-mobile-actions">${materialActions(material)}</div>
     </article>`;
   }).join("");
   $("#materials-table-body").innerHTML = filtered.map((material) => {
     const remaining = Math.max(0, numberValue(material.quantity) - numberValue(material.usedQuantity));
-    const unit = String(material.unit ?? "pcs");
+    const unit = materialUnitLabel(material.unit);
     const totalPrice = numberValue(material.price) * numberValue(material.quantity);
     return `<tr>
       <td>${escapeHtml(material.name)}</td>
@@ -709,7 +722,7 @@ function subscribeToMaterials() {
     state.materialsLoading = false;
     renderMaterials();
     console.error("Could not load materials.", error);
-    toast(`Could not load materials: ${error.message}`, true);
+    toast(`Nu s-au putut încărca materialele: ${error.message}`, true);
   });
 }
 
@@ -725,8 +738,8 @@ function openMaterialDialog(material = null) {
   materialForm.elements.unit.value = material?.unit ?? "pcs";
   materialForm.elements.quantity.value = material ? numberValue(material.quantity) : 0;
   materialForm.elements.usedQuantity.value = material ? numberValue(material.usedQuantity) : 0;
-  $("#material-form-title").textContent = material ? "Edit material" : "Add material";
-  $("#save-material-button").textContent = material ? "Save changes" : "Save material";
+  $("#material-form-title").textContent = material ? "Editează materialul" : "Adaugă material";
+  $("#save-material-button").textContent = material ? "Salvează modificările" : "Salvează materialul";
   clearError($("#material-form-error"));
   materialDialog.showModal();
 }
@@ -745,15 +758,15 @@ async function handleMaterialSubmit(event) {
     const price = Number(values.get("price"));
     const quantity = Number(values.get("quantity"));
     const usedQuantity = Number(values.get("usedQuantity"));
-    if (!name) throw new Error("Enter a material name.");
-    if (!["pcs", "m", "cm"].includes(unit)) throw new Error("Choose a valid material unit.");
+    if (!name) throw new Error("Introdu denumirea materialului.");
+    if (!["pcs", "m", "cm"].includes(unit)) throw new Error("Alege o unitate de măsură validă.");
     if (![price, quantity, usedQuantity].every(Number.isFinite) || price < 0 || quantity < 0 || usedQuantity < 0) {
-      throw new Error("Price and quantities must be valid non-negative numbers.");
+      throw new Error("Prețul și cantitățile trebuie să fie numere valide, pozitive sau zero.");
     }
     if (unit === "pcs" && (![quantity, usedQuantity].every(Number.isInteger))) {
-      throw new Error("Pieces must be entered as whole numbers.");
+      throw new Error("Cantitatea în bucăți trebuie introdusă ca număr întreg.");
     }
-    if (usedQuantity > quantity) throw new Error("Used quantity cannot be greater than the total quantity.");
+    if (usedQuantity > quantity) throw new Error("Cantitatea folosită nu poate depăși cantitatea totală.");
     const payload = {
       name,
       distributor,
@@ -769,7 +782,7 @@ async function handleMaterialSubmit(event) {
       await addDoc(collection(db, "materials"), { ...payload, createdAt: serverTimestamp() });
     }
     materialDialog.close();
-    toast(state.editingMaterialId ? "Material updated." : "Material added.");
+    toast(state.editingMaterialId ? "Material actualizat." : "Material adăugat.");
   } catch (error) {
     console.error("Could not save material.", error);
     showError(errorElement, error.message);
@@ -795,19 +808,19 @@ async function changeMaterialUsedQuantity(id, direction) {
     });
   } catch (error) {
     console.error("Could not update material used quantity.", error);
-    toast(`Could not update used quantity: ${error.message}`, true);
+    toast(`Nu s-a putut actualiza cantitatea folosită: ${error.message}`, true);
   }
 }
 
 async function deleteMaterial(id) {
   const material = state.materials.find((item) => item.id === id);
-  if (!material || !window.confirm(`Delete material "${material.name}"? This cannot be undone.`)) return;
+  if (!material || !window.confirm(`Ștergi materialul „${material.name}”? Acțiunea nu poate fi anulată.`)) return;
   try {
     await deleteDoc(doc(db, "materials", id));
-    toast("Material deleted.");
+    toast("Material șters.");
   } catch (error) {
     console.error("Could not delete material.", error);
-    toast(`Could not delete material: ${error.message}`, true);
+    toast(`Nu s-a putut șterge materialul: ${error.message}`, true);
   }
 }
 
@@ -834,12 +847,31 @@ function showPage(name) {
   $("#items-page").hidden = name !== "items";
   $("#settings-page").hidden = name !== "settings";
   $(".mobile-action-bar").hidden = name !== "dashboard";
+  $("#back-button").hidden = name === "hub";
   $("#settings-button").setAttribute("aria-current", name === "settings" ? "page" : "false");
-  $("#workspace-button").setAttribute("aria-current", name === "hub" ? "page" : "false");
+  $("#home-menu-button").setAttribute("aria-current", ["hub", "inventory-home", "dashboard", "market-history", "materials", "accounting", "items"].includes(name) ? "page" : "false");
+  $("#home-menu").hidden = true;
+  $("#home-menu-button").setAttribute("aria-expanded", "false");
+  $("#home-menu").querySelectorAll("[data-nav-page]").forEach((button) => {
+    button.setAttribute("aria-current", button.dataset.navPage === name
+      || (button.dataset.navPage === "inventory-home" && ["dashboard", "market-history", "materials"].includes(name))
+      ? "page"
+      : "false");
+  });
   if (name === "items") renderCatalog();
   if (name === "accounting") renderAccounting();
   if (name === "market-history") void loadMarketHistoryInventoryTotals();
   if (name === "materials") renderMaterials();
+}
+
+function goBackToParentPage() {
+  const parentPages = {
+    "inventory-home": "hub",
+    dashboard: "inventory-home",
+    "market-history": "inventory-home",
+    materials: "inventory-home"
+  };
+  showPage(parentPages[state.currentPage] ?? "hub");
 }
 
 function populatePastMarketYears() {
@@ -902,15 +934,15 @@ async function handlePastMarketSubmit(event) {
     const bankIncome = Number(values.get("bankIncome"));
     const totalItemsSold = Number(values.get("totalItemsSold"));
     if (!/^\d{4}$/.test(year) || startDate.slice(0, 4) !== year || endDate.slice(0, 4) !== year) {
-      throw new Error("The start and end dates must both belong to the selected year.");
+      throw new Error("Datele de început și de sfârșit trebuie să fie în anul selectat.");
     }
-    if (endDate < startDate) throw new Error("The end date must be the same as or later than the start date.");
-    if (!Number.isInteger(durationDays) || durationDays < 1) throw new Error("Number of days must be a positive whole number.");
+    if (endDate < startDate) throw new Error("Data de sfârșit trebuie să fie aceeași sau ulterioară datei de început.");
+    if (!Number.isInteger(durationDays) || durationDays < 1) throw new Error("Numărul de zile trebuie să fie un număr întreg pozitiv.");
     if (![cashIncome, bankIncome].every((amount) => Number.isFinite(amount) && amount >= 0)) {
-      throw new Error("Enter valid non-negative cash and bank income amounts.");
+      throw new Error("Introdu sume valide, pozitive sau zero, pentru încasările în numerar și bancă.");
     }
     if (!Number.isInteger(totalItemsSold) || totalItemsSold < 0) {
-      throw new Error("Total items sold must be a whole number of zero or more.");
+      throw new Error("Numărul total de produse vândute trebuie să fie un număr întreg egal cu zero sau mai mare.");
     }
 
     await addDoc(collection(db, "events"), {
@@ -930,7 +962,7 @@ async function handlePastMarketSubmit(event) {
       closedAt: serverTimestamp()
     });
     pastMarketDialog.close();
-    toast(`Past market added to ${year} history.`);
+    toast(`Târg adăugat în istoricul anului ${year}.`);
   } catch (error) {
     console.error("Could not add past market history.", error);
     showError(errorElement, error.message);
@@ -1064,7 +1096,7 @@ function subscribeToAccountingEntries() {
     state.accountingLoading = false;
     renderAccounting();
     console.error("Could not load accounting entries.", error);
-    toast(`Could not load accounting entries: ${error.message}`, true);
+    toast(`Nu s-au putut încărca operațiunile contabile: ${error.message}`, true);
   });
 }
 
@@ -1097,7 +1129,7 @@ function openAccountingDialog(entry = null) {
 function openAccountingImportDialog() {
   accountingImportForm.reset();
   $("#accounting-import-year").value = String(new Date().getFullYear());
-  $("#accounting-import-preview").textContent = "Choose a year and CSV file to validate the rows before importing.";
+  $("#accounting-import-preview").textContent = "Alege anul și fișierul CSV pentru validarea rândurilor înainte de import.";
   clearError($("#accounting-import-error"));
   state.accountingImportValidation = null;
   state.accountingImportValidationKey = "";
@@ -1118,11 +1150,11 @@ function parseAccountingImportDate(value, rowNumber) {
   } else if (/^\d{2}\.\d{2}\.\d{4}$/.test(dateValue)) {
     [day, month, year] = dateValue.split(".").map(Number);
   } else {
-    throw new Error(`Row ${rowNumber}: Data Operatiunii must be YYYY-MM-DD or DD.MM.YYYY.`);
+    throw new Error(`Rândul ${rowNumber}: Data Operatiunii trebuie să fie în formatul YYYY-MM-DD sau DD.MM.YYYY.`);
   }
   const date = new Date(Date.UTC(year, month - 1, day));
   if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
-    throw new Error(`Row ${rowNumber}: Data Operatiunii is not a valid date.`);
+    throw new Error(`Rândul ${rowNumber}: Data Operatiunii nu este o dată validă.`);
   }
   return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
@@ -1131,25 +1163,25 @@ function parseAccountingImportAmount(value, fieldName, rowNumber) {
   const normalized = String(value ?? "").trim();
   if (!normalized) return 0;
   if (!/^-?\d+(?:[.,]\d{1,2})?$/.test(normalized)) {
-    throw new Error(`Row ${rowNumber}: ${fieldName} must be a number with up to two decimal places.`);
+    throw new Error(`Rândul ${rowNumber}: ${fieldName} trebuie să fie un număr cu cel mult două zecimale.`);
   }
   const amount = Number(normalized.replace(",", "."));
-  if (!Number.isFinite(amount)) throw new Error(`Row ${rowNumber}: ${fieldName} is not a valid number.`);
+  if (!Number.isFinite(amount)) throw new Error(`Rândul ${rowNumber}: ${fieldName} nu este un număr valid.`);
   return amount;
 }
 
 function accountingEntriesFromCsv(text, selectedYear) {
-  if (!/^\d{4}$/.test(selectedYear)) throw new Error("Choose a valid four-digit year.");
+  if (!/^\d{4}$/.test(selectedYear)) throw new Error("Alege un an valid, format din patru cifre.");
   const [headers, ...rows] = parseCsv(text);
   const columns = new Map(headers.map((header, index) => [normalizeCsvHeader(header), index]));
-  if (columns.size !== headers.length) throw new Error("The CSV header contains duplicate or empty column names.");
+  if (columns.size !== headers.length) throw new Error("Antetul CSV conține denumiri de coloane duplicate sau goale.");
   const required = [
     "nrcrt", "dataoperatiunii", "document", "explicatii",
     "incasarinumerar", "incasaribanca", "platinumerar", "platibanca"
   ];
   const missing = required.filter((header) => !columns.has(header));
   if (missing.length) {
-    throw new Error(`Missing required CSV column${missing.length === 1 ? "" : "s"}: ${missing.join(", ")}.`);
+    throw new Error(`Lipsește ${missing.length === 1 ? "coloana obligatorie" : "coloanele obligatorii"} din CSV: ${missing.join(", ")}.`);
   }
 
   const read = (cells, column) => (cells[columns.get(column)] ?? "").trim();
@@ -1157,22 +1189,22 @@ function accountingEntriesFromCsv(text, selectedYear) {
   const warnings = [];
   const entries = rows.map((cells, index) => {
     const rowNumber = index + 2;
-    if (cells.length !== headers.length) throw new Error(`Row ${rowNumber}: expected ${headers.length} columns, found ${cells.length}.`);
+    if (cells.length !== headers.length) throw new Error(`Rândul ${rowNumber}: erau așteptate ${headers.length} coloane, dar au fost găsite ${cells.length}.`);
     const nrCrtText = read(cells, "nrcrt");
     const nrCrt = Number(nrCrtText);
     if (!/^\d+$/.test(nrCrtText) || !Number.isSafeInteger(nrCrt) || nrCrt < 1) {
-      throw new Error(`Row ${rowNumber}: Nr. crt. must be a positive whole number.`);
+      throw new Error(`Rândul ${rowNumber}: Nr. crt. trebuie să fie un număr întreg pozitiv.`);
     }
-    if (seenNumbers.has(nrCrt)) throw new Error(`Row ${rowNumber}: Nr. crt. ${nrCrt} appears more than once in this CSV.`);
+    if (seenNumbers.has(nrCrt)) throw new Error(`Rândul ${rowNumber}: Nr. crt. ${nrCrt} apare de mai multe ori în acest CSV.`);
     seenNumbers.add(nrCrt);
     const dataOperatiunii = parseAccountingImportDate(read(cells, "dataoperatiunii"), rowNumber);
     if (dataOperatiunii.slice(0, 4) !== selectedYear) {
-      throw new Error(`Row ${rowNumber}: date ${dataOperatiunii} does not match selected year ${selectedYear}.`);
+      throw new Error(`Rândul ${rowNumber}: data ${dataOperatiunii} nu corespunde anului selectat ${selectedYear}.`);
     }
     const explicatii = read(cells, "explicatii");
-    if (!explicatii) throw new Error(`Row ${rowNumber}: Explicatii cannot be empty.`);
+    if (!explicatii) throw new Error(`Rândul ${rowNumber}: câmpul Explicatii nu poate fi gol.`);
     const document = read(cells, "document");
-    if (!document) warnings.push(`entry ${nrCrt} has an empty Document`);
+    if (!document) warnings.push(`înregistrarea ${nrCrt} nu are completat câmpul Document`);
     return {
       nrCrt,
       dataOperatiunii,
@@ -1184,11 +1216,11 @@ function accountingEntriesFromCsv(text, selectedYear) {
       platiBanca: parseAccountingImportAmount(read(cells, "platibanca"), "Plati Banca", rowNumber)
     };
   });
-  if (!entries.length) throw new Error("The CSV contains no accounting entries.");
+  if (!entries.length) throw new Error("Fișierul CSV nu conține operațiuni contabile.");
   const signedCorrections = entries.filter((entry) =>
     entry.incasariNumerar < 0 || entry.incasariBanca < 0 || entry.platiNumerar < 0 || entry.platiBanca < 0
   ).length;
-  if (signedCorrections) warnings.push(`${signedCorrections} entr${signedCorrections === 1 ? "y has" : "ies have"} negative correction amount(s)`);
+  if (signedCorrections) warnings.push(`${signedCorrections} ${signedCorrections === 1 ? "operațiune are" : "operațiuni au"} sume negative de corecție`);
   return { entries, warnings };
 }
 
@@ -1199,7 +1231,7 @@ async function previewAccountingImport() {
   state.accountingImportValidationKey = "";
   clearError($("#accounting-import-error"));
   if (!file) {
-    $("#accounting-import-preview").textContent = "Choose a year and CSV file to validate the rows before importing.";
+    $("#accounting-import-preview").textContent = "Alege anul și fișierul CSV pentru validarea rândurilor înainte de import.";
     return;
   }
   try {
@@ -1207,8 +1239,8 @@ async function previewAccountingImport() {
     const key = accountingImportKey(file, year);
     state.accountingImportValidation = validation;
     state.accountingImportValidationKey = key;
-    const warning = validation.warnings.length ? ` Review: ${validation.warnings.join("; ")}.` : "";
-    $("#accounting-import-preview").textContent = `${validation.entries.length} entries validated for ${year}.${warning} Import will append these entries; existing entry numbers will not be overwritten.`;
+    const warning = validation.warnings.length ? ` Atenție: ${validation.warnings.join("; ")}.` : "";
+    $("#accounting-import-preview").textContent = `${validation.entries.length} operațiuni validate pentru anul ${year}.${warning} Importul va adăuga aceste operațiuni; numerele de înregistrare existente nu vor fi suprascrise.`;
   } catch (error) {
     $("#accounting-import-preview").textContent = "";
     showError($("#accounting-import-error"), error.message);
@@ -1223,7 +1255,7 @@ async function handleAccountingImportSubmit(event) {
   const file = $("#accounting-import-file").files?.[0];
   const year = $("#accounting-import-year").value.trim();
   if (!file) {
-    showError(errorElement, "Choose an accounting CSV file to import.");
+    showError(errorElement, "Alege fișierul CSV cu operațiuni contabile pe care dorești să îl imporți.");
     return;
   }
   const key = accountingImportKey(file, year);
@@ -1231,7 +1263,7 @@ async function handleAccountingImportSubmit(event) {
   try {
     if (!validation) validation = accountingEntriesFromCsv(await file.text(), year);
     const { entries, warnings } = validation;
-    if (!navigator.onLine) throw new Error("Connect to the internet before importing accounting entries.");
+    if (!navigator.onLine) throw new Error("Conectează-te la internet înainte de a importa operațiunile contabile.");
     const existingSnapshot = await getDocsFromServer(collection(db, "accounting_entries"));
     const existingNumbers = new Set(existingSnapshot.docs
       .map((item) => item.data())
@@ -1239,10 +1271,10 @@ async function handleAccountingImportSubmit(event) {
       .map((entry) => Number(entry.nrCrt)));
     const collision = entries.find((entry) => existingNumbers.has(entry.nrCrt));
     if (collision) {
-      throw new Error(`Entry number ${collision.nrCrt} already exists for ${year}. No rows were imported; resolve the number conflict and retry.`);
+      throw new Error(`Numărul de înregistrare ${collision.nrCrt} există deja pentru anul ${year}. Nu a fost importat niciun rând; rezolvă conflictul și încearcă din nou.`);
     }
-    const warningText = warnings.length ? `\n\nCSV notes: ${warnings.join("; ")}.` : "";
-    if (!window.confirm(`Append ${entries.length} accounting entries for ${year}? Existing entries will not be changed.${warningText}`)) return;
+    const warningText = warnings.length ? `\n\nObservații CSV: ${warnings.join("; ")}.` : "";
+    if (!window.confirm(`Adaugi ${entries.length} operațiuni contabile pentru anul ${year}? Înregistrările existente nu vor fi modificate.${warningText}`)) return;
 
     button.disabled = true;
     let importedCount = 0;
@@ -1261,13 +1293,13 @@ async function handleAccountingImportSubmit(event) {
       }
     } catch (error) {
       console.error("Could not complete accounting CSV import.", error);
-      throw new Error(`Import stopped after ${importedCount} of ${entries.length} entries: ${error.message}`);
+      throw new Error(`Importul s-a oprit după ${importedCount} din ${entries.length} operațiuni: ${error.message}`);
     }
     state.accountingYear = year;
     state.accountingMonth = "all";
     $("#accounting-month-filter").value = "all";
     $("#accounting-import-dialog").close();
-    toast(`Imported ${importedCount} accounting entries for ${year}.`);
+    toast(`Au fost importate ${importedCount} operațiuni contabile pentru anul ${year}.`);
     renderAccounting();
   } catch (error) {
     console.error("Could not import accounting CSV.", error);
@@ -1335,7 +1367,7 @@ async function deleteAccountingEntry(id) {
     toast("Operațiune ștearsă.");
   } catch (error) {
     console.error("Could not delete accounting entry.", error);
-    toast(`Could not delete accounting entry: ${error.message}`, true);
+    toast(`Nu s-a putut șterge operațiunea contabilă: ${error.message}`, true);
   }
 }
 
@@ -1392,7 +1424,7 @@ function subscribeToInventory() {
       state.inventoryLoading = false;
       renderInventory();
       console.error("Could not load inventory.", error);
-      toast(`Could not load inventory: ${error.message}`, true);
+      toast(`Nu s-a putut încărca stocul: ${error.message}`, true);
     }
   );
 }
@@ -1442,9 +1474,9 @@ function soldControls(item) {
   const total = numberValue(item.totalQty);
   const disabled = eventIsClosed(state.events.find((event) => event.id === state.activeEventId));
   return `<span class="sold-control">
-    <button class="stepper-button" type="button" data-action="sold-minus" data-id="${escapeHtml(item.id)}" aria-label="Record one fewer sold for ${escapeHtml(item.name)}" ${disabled || sold <= 0 ? "disabled" : ""}>−</button>
+    <button class="stepper-button" type="button" data-action="sold-minus" data-id="${escapeHtml(item.id)}" aria-label="Scade cu o unitate numărul vândut pentru ${escapeHtml(item.name)}" ${disabled || sold <= 0 ? "disabled" : ""}>−</button>
     <strong>${sold}</strong>
-    <button class="stepper-button" type="button" data-action="sold-plus" data-id="${escapeHtml(item.id)}" aria-label="Record one sold for ${escapeHtml(item.name)}" ${disabled || sold >= total ? "disabled" : ""}>+</button>
+    <button class="stepper-button" type="button" data-action="sold-plus" data-id="${escapeHtml(item.id)}" aria-label="Adaugă o unitate vândută pentru ${escapeHtml(item.name)}" ${disabled || sold >= total ? "disabled" : ""}>+</button>
   </span>`;
 }
 
@@ -1453,17 +1485,17 @@ function totalQuantityControls(item) {
   const sold = numberValue(item.soldQty);
   const disabled = eventIsClosed(state.events.find((event) => event.id === state.activeEventId));
   return `<span class="sold-control">
-    <button class="stepper-button" type="button" data-action="total-minus" data-id="${escapeHtml(item.id)}" aria-label="Remove one from stock for ${escapeHtml(item.name)}" ${disabled || total <= sold ? "disabled" : ""}>−</button>
+    <button class="stepper-button" type="button" data-action="total-minus" data-id="${escapeHtml(item.id)}" aria-label="Scade cu o unitate stocul pentru ${escapeHtml(item.name)}" ${disabled || total <= sold ? "disabled" : ""}>−</button>
     <strong>${total}</strong>
-    <button class="stepper-button" type="button" data-action="total-plus" data-id="${escapeHtml(item.id)}" aria-label="Add one to stock for ${escapeHtml(item.name)}" ${disabled ? "disabled" : ""}>+</button>
+    <button class="stepper-button" type="button" data-action="total-plus" data-id="${escapeHtml(item.id)}" aria-label="Adaugă o unitate în stoc pentru ${escapeHtml(item.name)}" ${disabled ? "disabled" : ""}>+</button>
   </span>`;
 }
 
 function productActions(item) {
   const disabled = eventIsClosed(state.events.find((event) => event.id === state.activeEventId));
   return `<span class="row-actions">
-    <button class="text-button" type="button" data-action="edit" data-id="${escapeHtml(item.id)}" ${disabled ? "disabled" : ""}>Edit</button>
-    <button class="text-button danger" type="button" data-action="delete" data-id="${escapeHtml(item.id)}" ${disabled ? "disabled" : ""}>Delete</button>
+    <button class="text-button" type="button" data-action="edit" data-id="${escapeHtml(item.id)}" ${disabled ? "disabled" : ""}>Editează</button>
+    <button class="text-button danger" type="button" data-action="delete" data-id="${escapeHtml(item.id)}" ${disabled ? "disabled" : ""}>Șterge</button>
   </span>`;
 }
 
@@ -1483,7 +1515,7 @@ function renderSummary() {
   $("#summary-prepared").textContent = String(totals.prepared);
   $("#summary-sold").textContent = String(totals.sold);
   $("#summary-revenue").textContent = money.format(totals.revenue);
-  $("#summary-profit").textContent = `Net profit ${money.format(totals.profit)}`;
+  $("#summary-profit").textContent = `Profit net ${money.format(totals.profit)}`;
   $("#summary-potential").textContent = money.format(totals.potential);
 }
 
@@ -1493,7 +1525,7 @@ function renderCategoryPills() {
   const choices = ["All", ...categories];
   if (!choices.includes(state.selectedCategory)) state.selectedCategory = "All";
   $("#category-pills").innerHTML = choices.map((category) => `
-    <button class="category-pill" type="button" data-category="${escapeHtml(category)}" aria-pressed="${state.selectedCategory === category}">${escapeHtml(category)}</button>
+    <button class="category-pill" type="button" data-category="${escapeHtml(category)}" aria-pressed="${state.selectedCategory === category}">${category === "All" ? "Toate" : escapeHtml(categoryLabel(category))}</button>
   `).join("");
 }
 
@@ -1510,22 +1542,22 @@ function renderInventory() {
   renderSummary();
   renderCategoryPills();
   $("#inventory-count").textContent = event
-    ? `${filtered.length} ${filtered.length === 1 ? "product" : "products"}${filtered.length !== state.inventory.length ? ` shown · ${state.inventory.length} total` : ""}${marketClosed ? " · Market closed (read-only)" : ""}`
-    : "Choose or create an event to manage its products.";
+    ? `${filtered.length} ${filtered.length === 1 ? "produs" : "produse"}${filtered.length !== state.inventory.length ? ` afișate · ${state.inventory.length} în total` : ""}${marketClosed ? " · Târg încheiat (doar pentru citire)" : ""}`
+    : "Alege sau creează un târg pentru a-i gestiona produsele.";
 
   const showEmpty = !state.inventoryLoading && (state.inventory.length === 0 || filtered.length === 0);
   empty.hidden = !showEmpty;
   if (state.inventory.length === 0) {
-    $("#empty-title").textContent = event ? (marketClosed ? "Market inventory is closed" : "Your inventory starts here") : "Create your first event";
+    $("#empty-title").textContent = event ? (marketClosed ? "Stocul târgului este închis" : "Stocul tău începe aici") : "Creează primul târg";
     $("#empty-description").textContent = event
-      ? marketClosed ? "This market is closed. Its recorded products and sales are kept as history." : "Add your first product to keep its stock and sales close at hand."
-      : "Set up a market or shop update before adding products.";
-    $("#empty-add-button").textContent = event ? "＋ Add your first product" : "＋ New Event";
+      ? marketClosed ? "Târgul s-a încheiat. Produsele și vânzările înregistrate sunt păstrate în istoric." : "Adaugă primul produs pentru a-i urmări stocul și vânzările."
+      : "Creează un târg sau o actualizare a magazinului înainte de a adăuga produse.";
+    $("#empty-add-button").textContent = event ? "＋ Adaugă primul produs" : "＋ Târg nou";
     $("#empty-add-button").dataset.action = event ? "add" : "new-event";
     $("#empty-add-button").hidden = marketClosed;
   } else if (filtered.length === 0) {
-    $("#empty-title").textContent = "No matching products";
-    $("#empty-description").textContent = "Try another search or choose a different category.";
+    $("#empty-title").textContent = "Nu s-au găsit produse";
+    $("#empty-description").textContent = "Încearcă altă căutare sau selectează altă categorie.";
     $("#empty-add-button").hidden = true;
   } else {
     $("#empty-add-button").hidden = false;
@@ -1553,16 +1585,16 @@ function renderInventory() {
       </div>
       <div class="product-card-price">${money.format(numberValue(item.price))}</div>
       <div class="product-card-stats">
-        <div class="product-stat"><span>Available</span><strong><span class="available-badge ${availableClass(available, total)}">${available}</span></strong></div>
-        <div class="product-stat"><span>Money made</span><strong>${money.format(revenue)}</strong></div>
-        <div class="product-stat"><span>Total price</span><strong>${money.format(potential)}</strong></div>
+        <div class="product-stat"><span>Disponibil</span><strong><span class="available-badge ${availableClass(available, total)}">${available}</span></strong></div>
+        <div class="product-stat"><span>Încasări</span><strong>${money.format(revenue)}</strong></div>
+        <div class="product-stat"><span>Valoare totală</span><strong>${money.format(potential)}</strong></div>
       </div>
       <div class="product-card-quantities">
-        <div class="product-quantity-control"><span>In stock</span>${totalQuantityControls(item)}</div>
-        <div class="product-quantity-control"><span>Sold</span>${soldControls(item)}</div>
+        <div class="product-quantity-control"><span>În stoc</span>${totalQuantityControls(item)}</div>
+        <div class="product-quantity-control"><span>Vândut</span>${soldControls(item)}</div>
       </div>
       <div class="product-card-bottom">
-        <span class="sold-label">${sold} sold of ${total}</span>
+        <span class="sold-label">${sold} vândute din ${total}</span>
         <span class="mobile-card-actions">${productActions(item)}</span>
       </div>
     </article>`;
@@ -1576,7 +1608,7 @@ function renderInventory() {
       <td><div class="product-thumb">${imageMarkup(item)}</div></td>
       <td><span class="sku-badge">${escapeHtml(item.sku)}</span></td>
       <td class="product-name-cell" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}${item.color ? `<small class="product-color-label">${escapeHtml(item.color)}</small>` : ""}</td>
-      <td>${escapeHtml(item.category)}</td>
+      <td>${escapeHtml(categoryLabel(item.category))}</td>
       <td>${money.format(numberValue(item.price))}</td>
       <td>${totalQuantityControls(item)}</td>
       <td><span class="available-badge ${availableClass(available, total)}">${available}</span></td>
@@ -1590,7 +1622,7 @@ function renderInventory() {
   document.querySelectorAll(".sort-button").forEach((button) => {
     const active = button.dataset.sort === state.sortBy;
     button.querySelector("span").textContent = active ? (state.sortDirection === 1 ? "↑" : "↓") : "";
-    button.setAttribute("aria-label", `${button.textContent.trim()}${active ? (state.sortDirection === 1 ? ", ascending" : ", descending") : ""}`);
+    button.setAttribute("aria-label", `${button.textContent.trim()}${active ? (state.sortDirection === 1 ? ", crescător" : ", descrescător") : ""}`);
   });
 }
 
@@ -1607,9 +1639,9 @@ function resetInventoryForm(item = null) {
   inventoryForm.reset();
   state.editingId = item?.id ?? null;
   state.imageBase64 = item?.imageBase64 ?? "";
-  $("#inventory-form-title").textContent = item ? "Edit inventory" : "Add inventory";
-  $("#inventory-form-eyebrow").textContent = item ? "UPDATE PRODUCT DETAILS" : "PRODUCT DETAILS";
-  $("#save-inventory-button").textContent = item ? "Save changes" : "Save product";
+  $("#inventory-form-title").textContent = item ? "Editează produsul" : "Adaugă produs";
+  $("#inventory-form-eyebrow").textContent = item ? "ACTUALIZEAZĂ DETALIILE PRODUSULUI" : "DETALII PRODUS";
+  $("#save-inventory-button").textContent = item ? "Salvează modificările" : "Salvează produsul";
   clearError($("#inventory-form-error"));
 
   if (item) {
@@ -1631,13 +1663,13 @@ function renderImagePreview() {
   const preview = $("#image-preview");
   preview.innerHTML = state.imageBase64
     ? `<img src="data:image/jpeg;base64,${escapeHtml(state.imageBase64)}" alt="Product thumbnail preview">`
-    : "<span>Image preview</span>";
+    : "<span>Previzualizare imagine</span>";
 }
 
 function openInventoryDialog(item = null) {
   const event = state.events.find((current) => current.id === state.activeEventId);
   if (!event || eventIsClosed(event)) {
-    toast(event ? "This market is closed and its inventory is read-only." : "Create or choose an event before adding inventory.", true);
+    toast(event ? "Târgul este încheiat, iar stocul poate fi doar consultat." : "Creează sau selectează un târg înainte de a adăuga produse.", true);
     return;
   }
   if (!item) {
@@ -1656,23 +1688,23 @@ function openInventoryDialog(item = null) {
 function openProductQuantityDialog(product) {
   const event = state.events.find((current) => current.id === state.activeEventId);
   if (!event || eventIsClosed(event)) {
-    toast(event ? "This market is closed and its inventory is read-only." : "Create or choose an event before adding inventory.", true);
+    toast(event ? "Târgul este încheiat, iar stocul poate fi doar consultat." : "Creează sau selectează un târg înainte de a adăuga produse.", true);
     return;
   }
   const variants = missingCatalogVariants(product);
   if (!variants.length) {
-    toast("This item is already in the selected market.", true);
+    toast("Acest articol există deja în târgul selectat.", true);
     return;
   }
   state.selectedCatalogProductId = product.id;
   $("#selected-product-name").textContent = product.name;
-  $("#selected-product-details").textContent = `${product.sku} · ${product.category} · ${money.format(numberValue(product.price))}`;
+  $("#selected-product-details").textContent = `${product.sku} · ${categoryLabel(product.category)} · ${money.format(numberValue(product.price))}`;
   $("#product-quantity-form").reset();
   $("#product-variant-stock-list").innerHTML = variants.map((variant) => `
     <label class="market-variant-stock" data-market-variant-id="${escapeHtml(variant.id)}">
       <span class="product-thumb">${imageMarkup({ imageBase64: variant.imageBase64 })}</span>
-      <span class="market-variant-copy"><strong>${escapeHtml(variant.color)}</strong><small>Initial market quantity</small></span>
-      <input data-market-variant-quantity type="number" min="0" step="1" inputmode="numeric" value="0" aria-label="${escapeHtml(variant.color)} initial quantity" required>
+      <span class="market-variant-copy"><strong>${escapeHtml(variant.color)}</strong><small>Cantitatea inițială pentru târg</small></span>
+      <input data-market-variant-quantity type="number" min="0" step="1" inputmode="numeric" value="0" aria-label="${escapeHtml(variant.color)} — cantitate inițială" required>
     </label>
   `).join("");
   $("#product-quantity-error").hidden = true;
@@ -1685,9 +1717,9 @@ function openCatalogItemDialog(product = null) {
   state.catalogVariants = product
     ? catalogVariants(product).map((variant) => ({ ...variant }))
     : [{ id: createVariantId(), color: "Standard", imageBase64: "" }];
-  $("#catalog-item-title").textContent = product ? "Edit Item" : "Add Item";
-  $("#catalog-item-eyebrow").textContent = product ? "UPDATE ITEM CATALOG" : "PRODUCT CATALOG";
-  $("#save-catalog-item-button").textContent = product ? "Save changes" : "Save item";
+  $("#catalog-item-title").textContent = product ? "Editează articolul" : "Adaugă articol";
+  $("#catalog-item-eyebrow").textContent = product ? "ACTUALIZEAZĂ CATALOGUL" : "CATALOG PRODUSE";
+  $("#save-catalog-item-button").textContent = product ? "Salvează modificările" : "Salvează articolul";
   $("#catalog-item-error").hidden = true;
   renderCategoryControls();
   if (product) {
@@ -1718,17 +1750,17 @@ async function handleCatalogItemSubmit(event) {
       product.id !== state.editingCatalogId
       && String(product.sku ?? "").trim().toLocaleLowerCase() === sku.toLocaleLowerCase()
     );
-    if (duplicate) throw new Error(`SKU "${sku}" is already used by ${duplicate.name}.`);
+    if (duplicate) throw new Error(`Codul SKU „${sku}” este deja folosit de articolul „${duplicate.name}”.`);
 
     const variants = [...form.querySelectorAll("[data-variant-row]")].map((row) => ({
       id: row.dataset.variantId,
       color: row.querySelector("[data-variant-color]").value.trim(),
       imageBase64: state.catalogVariants.find((variant) => variant.id === row.dataset.variantId)?.imageBase64 ?? ""
     }));
-    if (!variants.length || variants.length > 12) throw new Error("An item must have between 1 and 12 color variants.");
-    if (variants.some((variant) => !variant.color)) throw new Error("Each color variant needs a name.");
+    if (!variants.length || variants.length > 12) throw new Error("Un articol trebuie să aibă între 1 și 12 variante de culoare.");
+    if (variants.some((variant) => !variant.color)) throw new Error("Fiecare variantă de culoare trebuie să aibă un nume.");
     if (new Set(variants.map((variant) => variant.color.toLocaleLowerCase())).size !== variants.length) {
-      throw new Error("Each color variant must have a unique name.");
+      throw new Error("Numele fiecărei variante de culoare trebuie să fie unic.");
     }
 
     const product = {
@@ -1744,10 +1776,10 @@ async function handleCatalogItemSubmit(event) {
     };
     if (state.editingCatalogId) {
       await updateDoc(doc(db, "products", state.editingCatalogId), product);
-      toast("Item catalog updated. Existing market prices were not changed.");
+      toast("Catalog actualizat. Prețurile târgurilor existente nu au fost modificate.");
     } else {
       await addDoc(collection(db, "products"), { ...product, createdAt: serverTimestamp() });
-      toast("Item added to your catalog.");
+      toast("Articol adăugat în catalog.");
     }
     catalogItemDialog.close();
   } catch (error) {
@@ -1760,13 +1792,13 @@ async function handleCatalogItemSubmit(event) {
 
 async function deleteCatalogItem(id) {
   const product = state.catalog.find((item) => item.id === id);
-  if (!product || !window.confirm(`Remove "${product.name}" from the item catalog? Existing market records will stay unchanged.`)) return;
+  if (!product || !window.confirm(`Elimini articolul „${product.name}” din catalog? Înregistrările târgurilor existente vor rămâne neschimbate.`)) return;
   try {
     await deleteDoc(doc(db, "products", id));
-    toast("Item removed from catalog; old market records were kept.");
+    toast("Articol șters din catalog; înregistrările târgurilor anterioare au fost păstrate.");
   } catch (error) {
     console.error("Could not remove catalog item.", error);
-    toast(`Could not remove catalog item: ${error.message}`, true);
+    toast(`Nu s-a putut șterge articolul din catalog: ${error.message}`, true);
   }
 }
 
@@ -1782,12 +1814,12 @@ async function handleProductQuantitySubmit(event) {
   try {
     const batch = writeBatch(db);
     const rows = [...$("#product-variant-stock-list").querySelectorAll("[data-market-variant-id]")];
-    if (!rows.length) throw new Error("There are no color variants available to add.");
+    if (!rows.length) throw new Error("Nu există variante de culoare disponibile pentru adăugare.");
     rows.forEach((row) => {
       const variant = catalogVariants(product).find((item) => item.id === row.dataset.marketVariantId);
-      if (!variant) throw new Error("A color variant could not be found. Close this dialog and try again.");
+      if (!variant) throw new Error("Varianta de culoare nu a fost găsită. Închide această fereastră și încearcă din nou.");
       const totalQty = Number(row.querySelector("[data-market-variant-quantity]").value);
-      if (!Number.isInteger(totalQty) || totalQty < 0) throw new Error("Variant quantities must be whole numbers of zero or more.");
+      if (!Number.isInteger(totalQty) || totalQty < 0) throw new Error("Cantitățile variantelor trebuie să fie numere întregi egale cu zero sau mai mari.");
       batch.set(doc(collection(db, "inventory")), {
         marketId: state.activeEventId,
         productId: product.id,
@@ -1808,7 +1840,7 @@ async function handleProductQuantitySubmit(event) {
     await batch.commit();
     productQuantityDialog.close();
     productPickerDialog.close();
-    toast(`${rows.length} color variant${rows.length === 1 ? "" : "s"} added to this market, including zero-stock variants.`);
+    toast(`${rows.length} ${rows.length === 1 ? "variantă de culoare adăugată" : "variante de culoare adăugate"} la acest târg, inclusiv variantele fără stoc.`);
   } catch (error) {
     console.error("Could not add item to market.", error);
     showError($("#product-quantity-error"), error.message);
@@ -1820,8 +1852,8 @@ async function handleProductQuantitySubmit(event) {
 function openCategoryDialog() {
   state.editingCategoryId = null;
   $("#category-form").reset();
-  $("#category-input-label").textContent = "New category";
-  $("#save-category-button").textContent = "Add category";
+  $("#category-input-label").textContent = "Categorie nouă";
+  $("#save-category-button").textContent = "Adaugă categoria";
   $("#cancel-category-edit").hidden = true;
   clearError($("#category-form-error"));
   renderCategoryList();
@@ -1833,8 +1865,8 @@ function editCategory(id) {
   if (!category) return;
   state.editingCategoryId = id;
   $("#category-name-input").value = category.name;
-  $("#category-input-label").textContent = "Rename category";
-  $("#save-category-button").textContent = "Save category";
+  $("#category-input-label").textContent = "Redenumește categoria";
+  $("#save-category-button").textContent = "Salvează categoria";
   $("#cancel-category-edit").hidden = false;
   clearError($("#category-form-error"));
   $("#category-name-input").focus();
@@ -1850,7 +1882,7 @@ async function handleCategorySubmit(event) {
     && category !== state.categoryRecords.find((item) => item.id === state.editingCategoryId)?.name
   );
   if (duplicate) {
-    showError(formError, `The category "${duplicate}" already exists.`);
+    showError(formError, `Categoria „${duplicate}” există deja.`);
     return;
   }
 
@@ -1873,19 +1905,19 @@ async function handleCategorySubmit(event) {
       if (!products.length) {
         await updateDoc(doc(db, "categories", state.editingCategoryId), { name });
       }
-      toast(`Category renamed to ${name}. Existing market records were not changed.`);
+      toast(`Categoria a fost redenumită în ${name}. Târgurile existente nu au fost modificate.`);
     } else {
       await setDoc(doc(db, "categories", categoryDocumentId(name)), {
         name,
         createdAt: serverTimestamp()
       });
-      toast(`Category "${name}" added.`);
+      toast(`Categoria „${name}” a fost adăugată.`);
     }
 
     state.editingCategoryId = null;
     $("#category-form").reset();
-    $("#category-input-label").textContent = "New category";
-    $("#save-category-button").textContent = "Add category";
+    $("#category-input-label").textContent = "Categorie nouă";
+    $("#save-category-button").textContent = "Adaugă categoria";
     $("#cancel-category-edit").hidden = true;
   } catch (error) {
     console.error("Could not save category.", error);
@@ -1899,16 +1931,16 @@ async function deleteCategory(id) {
   const category = state.categoryRecords.find((item) => item.id === id);
   if (!category) return;
   if (state.catalog.some((product) => product.category === category.name)) {
-    toast("Reassign catalog items before removing this category.", true);
+    toast("Reasignează articolele din catalog înainte de a șterge această categorie.", true);
     return;
   }
-  if (!window.confirm(`Remove "${category.name}" from the category list? Old market records will retain it.`)) return;
+  if (!window.confirm(`Elimini categoria „${category.name}” din listă? Înregistrările târgurilor anterioare o vor păstra.`)) return;
   try {
     await deleteDoc(doc(db, "categories", id));
-    toast(`Category "${category.name}" removed. Historical market records were kept.`);
+    toast(`Categoria „${category.name}” a fost ștearsă. Înregistrările târgurilor au fost păstrate.`);
   } catch (error) {
     console.error("Could not remove category.", error);
-    toast(`Could not remove category: ${error.message}`, true);
+    toast(`Nu s-a putut șterge categoria: ${error.message}`, true);
   }
 }
 
@@ -1931,9 +1963,9 @@ function openSettingsDialog() {
   settingsForm.reset();
   clearError($("#settings-form-error"));
   $("#settings-event-hint").textContent = event
-    ? "Edit this event or remove it and its inventory."
-    : "Create or choose an event to manage it.";
-  $("#settings-account-email").textContent = state.user?.email ?? "Signed in";
+    ? "Editează târgul sau șterge-l împreună cu stocul aferent."
+    : "Creează sau selectează un târg pentru a-l gestiona.";
+  $("#settings-account-email").textContent = state.user?.email ?? "Autentificat";
 
   $("#selected-event-settings").querySelectorAll("input, select").forEach((field) => {
     field.disabled = !event;
@@ -2005,12 +2037,12 @@ function parseCsv(text) {
     }
   }
 
-  if (insideQuotes) throw new Error("The CSV has an unfinished quoted field.");
+  if (insideQuotes) throw new Error("Fișierul CSV conține un câmp între ghilimele care nu a fost închis.");
   if (field.length || row.length) {
     row.push(field);
     if (row.some((cell) => cell.trim() !== "")) rows.push(row);
   }
-  if (rows.length < 2) throw new Error("The CSV must contain a header row and at least one product.");
+  if (rows.length < 2) throw new Error("Fișierul CSV trebuie să conțină un rând de antet și cel puțin un articol.");
 
   return rows;
 }
@@ -2028,7 +2060,7 @@ function parseCsvQuantity(value, fieldName, rowNumber) {
   if (!normalized) return 0;
   const number = Number(normalized);
   if (!Number.isSafeInteger(number) || number < 0) {
-    throw new Error(`Row ${rowNumber}: ${fieldName} must be a non-negative whole number.`);
+    throw new Error(`Rândul ${rowNumber}: ${fieldName} trebuie să fie un număr întreg egal cu zero sau mai mare.`);
   }
   return number;
 }
@@ -2036,7 +2068,7 @@ function parseCsvQuantity(value, fieldName, rowNumber) {
 function parseCsvPrice(value, fieldName, rowNumber, optional = false) {
   const normalized = String(value ?? "").trim();
   if (!normalized && optional) return 0;
-  if (!normalized) throw new Error(`Row ${rowNumber}: ${fieldName} cannot be empty.`);
+  if (!normalized) throw new Error(`Rândul ${rowNumber}: câmpul ${fieldName} nu poate fi gol.`);
   let numberText = normalized.replace(/[^\d,.-]/g, "");
   if (numberText.includes(",") && numberText.includes(".")) {
     const decimalSeparator = numberText.lastIndexOf(",") > numberText.lastIndexOf(".") ? "," : ".";
@@ -2048,7 +2080,7 @@ function parseCsvPrice(value, fieldName, rowNumber, optional = false) {
   }
   const number = Number(numberText);
   if (!Number.isFinite(number) || number < 0) {
-    throw new Error(`Row ${rowNumber}: ${fieldName} must be a non-negative number.`);
+    throw new Error(`Rândul ${rowNumber}: ${fieldName} trebuie să fie un număr egal cu zero sau mai mare.`);
   }
   return number;
 }
@@ -2066,7 +2098,7 @@ function inventoryFromCsv(text) {
       price: "Price",
       totalqty: "Total Qty"
     };
-    throw new Error(`Missing required CSV column${missing.length === 1 ? "" : "s"}: ${missing.map((header) => labels[header]).join(", ")}.`);
+    throw new Error(`Lipsește ${missing.length === 1 ? "coloana obligatorie" : "coloanele obligatorii"} din CSV: ${missing.map((header) => labels[header]).join(", ")}.`);
   }
 
   const read = (cells, column) => {
@@ -2080,12 +2112,12 @@ function inventoryFromCsv(text) {
     const name = read(cells, "productname");
     const category = read(cells, "category");
     if (!sku || !name || !category) {
-      throw new Error(`Row ${rowNumber}: SKU, Product Name, and Category cannot be empty.`);
+      throw new Error(`Rândul ${rowNumber}: câmpurile SKU, Product Name și Category nu pot fi goale.`);
     }
     const totalQty = parseCsvQuantity(read(cells, "totalqty"), "Total Qty", rowNumber);
     const soldQty = parseCsvQuantity(read(cells, "soldqty"), "Sold Qty", rowNumber);
     if (soldQty > totalQty) {
-      throw new Error(`Row ${rowNumber}: Sold Qty cannot be greater than Total Qty.`);
+      throw new Error(`Rândul ${rowNumber}: Sold Qty nu poate fi mai mare decât Total Qty.`);
     }
     return {
       sku,
@@ -2111,24 +2143,24 @@ async function importMarketFromCsv() {
   const endDate = $("#import-event-end-date").value;
 
   if (!file) {
-    showError(error, "Choose the CSV file to import.");
+    showError(error, "Alege fișierul CSV pe care dorești să îl imporți.");
     return;
   }
   if (!name || !startDate || !endDate) {
-    showError(error, "Enter the event name, start date, and end date.");
+    showError(error, "Introdu denumirea târgului, data de început și data de sfârșit.");
     return;
   }
   if (endDate < startDate) {
-    showError(error, "The end date must be the same as or later than the start date.");
+    showError(error, "Data de sfârșit trebuie să fie aceeași sau ulterioară datei de început.");
     return;
   }
   if (file.size > 5 * 1024 * 1024) {
-    showError(error, "The CSV file is larger than 5 MB. Export or split a smaller inventory file.");
+    showError(error, "Fișierul CSV depășește 5 MB. Exportă sau împarte un fișier de stoc mai mic.");
     return;
   }
 
   button.disabled = true;
-  button.textContent = "Importing…";
+  button.textContent = "Se importă…";
   let eventCreated = false;
   let importedCount = 0;
   try {
@@ -2136,7 +2168,7 @@ async function importMarketFromCsv() {
     const seenVariants = new Set();
     products.forEach((product) => {
       const variantKey = `${product.sku.toLocaleLowerCase()}\u0000${product.color.toLocaleLowerCase()}`;
-      if (seenVariants.has(variantKey)) throw new Error(`The CSV contains duplicate color "${product.color}" for SKU "${product.sku}".`);
+      if (seenVariants.has(variantKey)) throw new Error(`Fișierul CSV conține culoarea „${product.color}” de mai multe ori pentru SKU-ul „${product.sku}”.`);
       seenVariants.add(variantKey);
     });
 
@@ -2255,16 +2287,16 @@ async function importMarketFromCsv() {
 
     state.activeEventId = eventRef.id;
     importDialog.close();
-    toast(`Imported ${name} with ${products.length} ${products.length === 1 ? "product" : "products"}.`);
+    toast(`S-a importat „${name}” cu ${products.length} ${products.length === 1 ? "produs" : "produse"}.`);
   } catch (error) {
     console.error("Could not import market from CSV.", error);
     const partialImportWarning = eventCreated
-      ? ` The event and ${importedCount} product${importedCount === 1 ? "" : "s"} were already saved; check the event list before retrying.`
+      ? ` Târgul a fost salvat împreună cu ${importedCount} ${importedCount === 1 ? "produs" : "produse"}; verifică lista târgurilor înainte de a încerca din nou.`
       : "";
     showError($("#import-form-error"), `${error.message}${partialImportWarning}`);
   } finally {
     button.disabled = false;
-    button.textContent = "Import market and products";
+    button.textContent = "Importă târgul și produsele";
   }
 }
 
@@ -2279,7 +2311,7 @@ async function compressImage(file) {
       bitmap = await new Promise((resolve, reject) => {
         const image = new Image();
         image.onload = () => resolve(image);
-        image.onerror = () => reject(new Error("That image could not be opened."));
+        image.onerror = () => reject(new Error("Imaginea nu a putut fi deschisă."));
         image.src = objectUrl;
       });
     }
@@ -2289,7 +2321,7 @@ async function compressImage(file) {
     canvas.width = Math.max(1, Math.round(bitmap.width * scale));
     canvas.height = Math.max(1, Math.round(bitmap.height * scale));
     const context = canvas.getContext("2d");
-    if (!context) throw new Error("This browser could not prepare the image.");
+    if (!context) throw new Error("Browserul nu a putut pregăti imaginea.");
     context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     return canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
   } finally {
@@ -2361,7 +2393,7 @@ async function handleEventSubmit(event) {
   try {
     const formData = new FormData(eventForm);
     if (formData.get("endDate") < formData.get("startDate")) {
-      throw new Error("The end date must be the same as or later than the start date.");
+      throw new Error("Data de sfârșit trebuie să fie aceeași sau ulterioară datei de început.");
     }
     const copiedCount = await createEvent({
       name: formData.get("name"),
@@ -2416,7 +2448,7 @@ async function handleMarketCloseSubmit(event) {
   clearError(errorElement);
   if (!market || market.type !== "Market" || eventIsClosed(market)) return;
   if (!navigator.onLine) {
-    showError(errorElement, "Connect to the internet before closing a market so its final sales can be verified.");
+    showError(errorElement, "Conectează-te la internet înainte de a încheia târgul pentru a putea verifica vânzările finale.");
     return;
   }
   button.disabled = true;
@@ -2425,7 +2457,7 @@ async function handleMarketCloseSubmit(event) {
     const cashIncome = Number(formData.get("cashIncome"));
     const bankIncome = Number(formData.get("bankIncome"));
     if (![cashIncome, bankIncome].every((amount) => Number.isFinite(amount) && amount >= 0)) {
-      throw new Error("Enter valid non-negative cash and bank income amounts.");
+      throw new Error("Introdu sume valide, pozitive sau zero, pentru încasările în numerar și bancă.");
     }
 
     const inventorySnapshot = await getDocsFromServer(query(
@@ -2445,10 +2477,10 @@ async function handleMarketCloseSubmit(event) {
       await saveMarketSoldTotal(market);
     } catch (refreshError) {
       console.error("Could not refresh final market sold total.", refreshError);
-      toast(`Market closed, but the final sold total could not be refreshed: ${refreshError.message}`, true);
+      toast(`Târgul a fost încheiat, dar totalul final al produselor vândute nu s-a putut actualiza: ${refreshError.message}`, true);
     }
     marketCloseDialog.close();
-    toast(`Market closed. Recorded income: ${money.format(cashIncome + bankIncome)}.`);
+    toast(`Târg încheiat. Încasări înregistrate: ${money.format(cashIncome + bankIncome)}.`);
   } catch (error) {
     console.error("Could not close market.", error);
     showError(errorElement, error.message);
@@ -2464,10 +2496,10 @@ async function refreshMarketSoldTotal() {
   button.disabled = true;
   try {
     const total = await saveMarketSoldTotal(market);
-    toast(`Final sold total updated to ${total}.`);
+    toast(`Totalul final al produselor vândute a fost actualizat la ${total}.`);
   } catch (error) {
     console.error("Could not refresh market sold total.", error);
-    toast(`Could not refresh market sold total: ${error.message}`, true);
+    toast(`Nu s-a putut actualiza totalul vânzărilor târgului: ${error.message}`, true);
   } finally {
     button.disabled = false;
   }
@@ -2487,7 +2519,7 @@ async function handleSettingsSubmit(event) {
     const startDate = String(formData.get("startDate"));
     const endDate = String(formData.get("endDate"));
     if (endDate < startDate) {
-      throw new Error("The end date must be the same as or later than the start date.");
+      throw new Error("Data de sfârșit trebuie să fie aceeași sau ulterioară datei de început.");
     }
 
     await updateDoc(doc(db, "events", activeEvent.id), {
@@ -2500,7 +2532,7 @@ async function handleSettingsSubmit(event) {
       edition: String(formData.get("edition") ?? "").trim()
     });
     settingsDialog.close();
-    toast("Event settings saved.");
+    toast("Setările târgului au fost salvate.");
   } catch (error) {
     console.error("Could not save event settings.", error);
     showError($("#settings-form-error"), error.message);
@@ -2513,13 +2545,13 @@ async function deleteActiveEvent() {
   const activeEvent = state.events.find((item) => item.id === state.activeEventId);
   if (!activeEvent) return;
   if (!navigator.onLine) {
-    showError($("#settings-form-error"), "Connect to the internet before deleting an event so all its inventory can be removed safely.");
+    showError($("#settings-form-error"), "Conectează-te la internet înainte de a șterge târgul, pentru a putea elimina în siguranță întregul său stoc.");
     return;
   }
 
   const deleteButton = $("#delete-event-button");
   clearError($("#settings-form-error"));
-  if (!window.confirm(`Permanently delete "${activeEvent.name}" and all of its products and sales? This cannot be undone.`)) return;
+  if (!window.confirm(`Ștergi definitiv târgul „${activeEvent.name}” și toate produsele și vânzările sale? Acțiunea nu poate fi anulată.`)) return;
 
   deleteButton.disabled = true;
   try {
@@ -2536,7 +2568,7 @@ async function deleteActiveEvent() {
 
     await deleteDoc(doc(db, "events", activeEvent.id));
     settingsDialog.close();
-    toast(`Deleted event and ${products.size} ${products.size === 1 ? "product" : "products"}.`);
+    toast(`Târgul și ${products.size} ${products.size === 1 ? "produs" : "produse"} au fost șterse.`);
   } catch (error) {
     console.error("Could not delete event and inventory.", error);
     showError($("#settings-form-error"), `Could not complete event deletion: ${error.message}`);
@@ -2554,13 +2586,13 @@ async function handleInventorySubmit(event) {
   try {
     const market = state.events.find((item) => item.id === state.activeEventId);
     if (!market || eventIsClosed(market)) {
-      throw new Error(market ? "This market is closed and its inventory is read-only." : "Create or choose an open market first.");
+      throw new Error(market ? "Târgul este încheiat, iar stocul poate fi doar consultat." : "Creează sau selectează mai întâi un târg deschis.");
     }
     const formData = new FormData(inventoryForm);
     const totalQty = Math.max(0, Math.floor(numberValue(formData.get("totalQty"))));
     const soldQty = Math.max(0, Math.floor(numberValue(formData.get("soldQty"))));
     if (soldQty > totalQty) {
-      throw new Error("Sold quantity cannot exceed total stock. Increase stock or adjust the sold count first.");
+      throw new Error("Cantitatea vândută nu poate depăși stocul total. Mărește stocul sau ajustează mai întâi cantitatea vândută.");
     }
     const price = Math.max(0, numberValue(formData.get("price")));
     const product = {
@@ -2580,18 +2612,18 @@ async function handleInventorySubmit(event) {
     if (state.editingId) {
       const write = updateDoc(doc(db, "inventory", state.editingId), product);
       inventoryDialog.close();
-      toast(navigator.onLine ? "Product updated." : "Product updated locally; it will sync when online.");
+      toast(navigator.onLine ? "Produs actualizat." : "Produs actualizat local; se va sincroniza la conectare.");
       void write.catch((error) => {
         console.error("Could not save product.", error);
-        toast(`Could not save product: ${error.message}`, true);
+        toast(`Nu s-a putut salva produsul: ${error.message}`, true);
       });
     } else {
       const write = addDoc(collection(db, "inventory"), product);
       inventoryDialog.close();
-      toast(navigator.onLine ? "Product added." : "Product added locally; it will sync when online.");
+      toast(navigator.onLine ? "Produs adăugat." : "Produs adăugat local; se va sincroniza la conectare.");
       void write.catch((error) => {
         console.error("Could not save product.", error);
-        toast(`Could not save product: ${error.message}`, true);
+        toast(`Nu s-a putut salva produsul: ${error.message}`, true);
       });
     }
   } catch (error) {
@@ -2614,15 +2646,15 @@ async function changeSoldCount(id, delta) {
       updatedAt: serverTimestamp()
     });
     toast(navigator.onLine
-      ? (delta > 0 ? "Sale recorded." : "Sold count updated.")
-      : (delta > 0 ? "Sale recorded locally; it will sync online." : "Sold count updated locally; it will sync online."));
+      ? (delta > 0 ? "Vânzare înregistrată." : "Cantitatea vândută a fost actualizată.")
+      : (delta > 0 ? "Vânzare înregistrată local; se va sincroniza online." : "Cantitatea vândută a fost actualizată local; se va sincroniza online."));
     void write.catch((error) => {
       console.error("Could not update sold quantity.", error);
-      toast(`Could not update sold quantity: ${error.message}`, true);
+      toast(`Nu s-a putut actualiza cantitatea vândută: ${error.message}`, true);
     });
   } catch (error) {
     console.error("Could not update sold quantity.", error);
-    toast(`Could not update sold quantity: ${error.message}`, true);
+    toast(`Nu s-a putut actualiza cantitatea vândută: ${error.message}`, true);
   }
 }
 
@@ -2638,42 +2670,42 @@ async function changeTotalCount(id, delta) {
       updatedAt: serverTimestamp()
     });
     toast(navigator.onLine
-      ? (delta > 0 ? "Stock increased by one." : "Stock reduced by one.")
-      : (delta > 0 ? "Stock increased locally; it will sync online." : "Stock reduced locally; it will sync online."));
+      ? (delta > 0 ? "Stocul a fost mărit cu o unitate." : "Stocul a fost redus cu o unitate.")
+      : (delta > 0 ? "Stocul a fost mărit local; se va sincroniza online." : "Stocul a fost redus local; se va sincroniza online."));
     void write.catch((error) => {
       console.error("Could not update stock quantity.", error);
-      toast(`Could not update stock quantity: ${error.message}`, true);
+      toast(`Nu s-a putut actualiza cantitatea din stoc: ${error.message}`, true);
     });
   } catch (error) {
     console.error("Could not update stock quantity.", error);
-    toast(`Could not update stock quantity: ${error.message}`, true);
+    toast(`Nu s-a putut actualiza cantitatea din stoc: ${error.message}`, true);
   }
 }
 
 async function deleteProduct(id) {
   if (eventIsClosed(state.events.find((event) => event.id === state.activeEventId))) {
-    toast("This market is closed and its inventory is read-only.", true);
+    toast("Târgul este încheiat, iar stocul poate fi doar consultat.", true);
     return;
   }
   const item = state.inventory.find((product) => product.id === id);
-  if (!item || !window.confirm(`Delete "${item.name}" from this event? This cannot be undone.`)) return;
+  if (!item || !window.confirm(`Ștergi produsul „${item.name}” din acest târg? Acțiunea nu poate fi anulată.`)) return;
   try {
     const write = deleteDoc(doc(db, "inventory", id));
-    toast(navigator.onLine ? "Product deleted." : "Product deleted locally; it will sync when online.");
+    toast(navigator.onLine ? "Produs șters." : "Produs șters local; modificarea se va sincroniza la conectare.");
     void write.catch((error) => {
       console.error("Could not delete product.", error);
-      toast(`Could not delete product: ${error.message}`, true);
+      toast(`Nu s-a putut șterge produsul: ${error.message}`, true);
     });
   } catch (error) {
     console.error("Could not delete product.", error);
-    toast(`Could not delete product: ${error.message}`, true);
+    toast(`Nu s-a putut șterge produsul: ${error.message}`, true);
   }
 }
 
 function exportCsv() {
   const event = state.events.find((item) => item.id === state.activeEventId);
   if (!event) {
-    toast("Choose an event before exporting.", true);
+    toast("Selectează un târg înainte de a exporta.", true);
     return;
   }
   const fields = ["SKU", "Product Name", "Color", "Category", "Price", "Unit Cost", "Total Qty", "Available Qty", "Sold Qty", "Money Made", "Total Price", "Net Profit", "Notes"];
@@ -2706,7 +2738,7 @@ function exportCsv() {
   link.download = `${event.name.replace(/[\\/:*?"<>|]+/g, "-")}-inventory.csv`;
   link.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-  toast("CSV export ready.");
+  toast("Exportul CSV este pregătit.");
 }
 
 function onInventoryAction(event) {
@@ -2734,7 +2766,7 @@ function initializeAppUi() {
     } catch (error) {
       console.error("Sign-in failed.", error);
       showError($("#login-error"), error.code === "auth/invalid-credential"
-        ? "That email and password combination was not recognized."
+        ? "Adresa de e-mail sau parola nu sunt corecte."
         : error.message);
     } finally {
       button.disabled = !isFirebaseConfigured;
@@ -2746,7 +2778,7 @@ function initializeAppUi() {
       await signOut(auth);
     } catch (error) {
       console.error("Sign-out failed.", error);
-      toast(`Could not log out: ${error.message}`, true);
+      toast(`Deconectarea a eșuat: ${error.message}`, true);
     }
   });
   $("#settings-logout-button").addEventListener("click", async () => {
@@ -2755,35 +2787,65 @@ function initializeAppUi() {
       settingsDialog.close();
     } catch (error) {
       console.error("Sign-out failed.", error);
-      toast(`Could not log out: ${error.message}`, true);
+      toast(`Deconectarea a eșuat: ${error.message}`, true);
     }
   });
   $("#delete-event-button").addEventListener("click", () => void deleteActiveEvent());
   $("#import-csv-button").addEventListener("click", () => void importMarketFromCsv());
 
-  $("#workspace-button").addEventListener("click", () => showPage("hub"));
+  $("#back-button").addEventListener("click", goBackToParentPage);
+  $("#home-menu-button").addEventListener("click", () => {
+    const menu = $("#home-menu");
+    const expanded = $("#home-menu-button").getAttribute("aria-expanded") === "true";
+    menu.hidden = expanded;
+    $("#home-menu-button").setAttribute("aria-expanded", String(!expanded));
+  });
+  $("#home-menu").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-nav-page]");
+    if (button) showPage(button.dataset.navPage);
+  });
   $("#mobile-menu-toggle").addEventListener("click", () => {
     const expanded = $("#mobile-menu-toggle").getAttribute("aria-expanded") === "true";
     $("#mobile-menu-toggle").setAttribute("aria-expanded", String(!expanded));
-    $("#mobile-menu-toggle").setAttribute("aria-label", expanded ? "Open menu" : "Close menu");
+    $("#mobile-menu-toggle").setAttribute("aria-label", expanded ? "Deschide meniul" : "Închide meniul");
     $(".topbar").classList.toggle("is-menu-open", !expanded);
   });
   $("#primary-navigation").addEventListener("click", (event) => {
     const button = event.target.closest("button");
-    if (!button) return;
+    if (!button || button.id === "home-menu-button") return;
     $(".topbar").classList.remove("is-menu-open");
     $("#mobile-menu-toggle").setAttribute("aria-expanded", "false");
-    $("#mobile-menu-toggle").setAttribute("aria-label", "Open menu");
+    $("#mobile-menu-toggle").setAttribute("aria-label", "Deschide meniul");
+  });
+  document.addEventListener("click", (event) => {
+    if ($("#primary-navigation").contains(event.target)) return;
+    $("#home-menu").hidden = true;
+    $("#home-menu-button").setAttribute("aria-expanded", "false");
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    if (!$("#home-menu").hidden) {
+      $("#home-menu").hidden = true;
+      $("#home-menu-button").setAttribute("aria-expanded", "false");
+      $("#home-menu-button").focus();
+      return;
+    }
+    if ($(".topbar").classList.contains("is-menu-open")) {
+      $(".topbar").classList.remove("is-menu-open");
+      $("#mobile-menu-toggle").setAttribute("aria-expanded", "false");
+      $("#mobile-menu-toggle").setAttribute("aria-label", "Deschide meniul");
+      $("#mobile-menu-toggle").focus();
+    }
   });
   $("#workspace-page").addEventListener("click", (event) => {
     const card = event.target.closest("[data-module]");
     if (card?.dataset.module === "inventory") showPage("inventory-home");
     if (card?.dataset.module === "accounting") showPage("accounting");
     if (event.target.closest('[data-home-page="items"]')) showPage("items");
-    if (event.target.closest('[data-home-page="market-history"]')) showPage("market-history");
   });
   $("#inventory-home-page").addEventListener("click", (event) => {
     if (event.target.closest('[data-inventory-page="markets"]')) showPage("dashboard");
+    if (event.target.closest('[data-inventory-page="market-history"]')) showPage("market-history");
     if (event.target.closest('[data-inventory-page="materials"]')) showPage("materials");
   });
   $("#add-material-button").addEventListener("click", () => openMaterialDialog());
@@ -2800,8 +2862,6 @@ function initializeAppUi() {
     materialForm.elements.quantity.step = step;
     materialForm.elements.usedQuantity.step = step;
   });
-  $("#market-history-button").addEventListener("click", () => showPage("market-history"));
-  $("#market-inventory-button").addEventListener("click", () => showPage("dashboard"));
   $("#market-history-year").addEventListener("change", (event) => {
     state.marketHistoryYear = event.currentTarget.value;
     renderMarketHistory();
@@ -2832,12 +2892,12 @@ function initializeAppUi() {
     if (settingsAction === "add-past-market") openPastMarketDialog();
     if (settingsAction === "edit-event") {
       if (state.activeEventId) openSettingsDialog();
-      else toast("Choose a market before editing one.", true);
+      else toast("Alege un târg înainte de a-l edita.", true);
     }
     if (settingsAction === "add-event") openNewEventDialog();
     if (settingsAction === "remove-event") {
       if (state.activeEventId) void deleteActiveEvent();
-      else toast("Choose a market before removing one.", true);
+      else toast("Alege un târg înainte de a-l șterge.", true);
     }
     if (settingsAction === "categories") openCategoryDialog();
     if (settingsAction === "import-event") {
@@ -2857,7 +2917,7 @@ function initializeAppUi() {
       accountDialog.close();
     } catch (error) {
       console.error("Sign-out failed.", error);
-      toast(`Could not log out: ${error.message}`, true);
+      toast(`Deconectarea a eșuat: ${error.message}`, true);
     }
   });
   $("#event-select-button").addEventListener("click", () => {
@@ -2883,7 +2943,7 @@ function initializeAppUi() {
     if (!event.target.closest(".topbar")) {
       $(".topbar").classList.remove("is-menu-open");
       $("#mobile-menu-toggle").setAttribute("aria-expanded", "false");
-      $("#mobile-menu-toggle").setAttribute("aria-label", "Open menu");
+      $("#mobile-menu-toggle").setAttribute("aria-label", "Deschide meniul");
     }
   });
   $("#add-catalog-item-button").addEventListener("click", () => openCatalogItemDialog());
@@ -2907,7 +2967,7 @@ function initializeAppUi() {
   });
   $("#add-catalog-variant").addEventListener("click", () => {
     if (state.catalogVariants.length >= 12) {
-      toast("An item can have up to 12 color variants.", true);
+      toast("Un articol poate avea cel mult 12 variante de culoare.", true);
       return;
     }
     state.catalogVariants.push({ id: createVariantId(), color: "", imageBase64: "" });
@@ -2925,14 +2985,14 @@ function initializeAppUi() {
     const file = input.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) {
-      showError($("#catalog-item-error"), "Choose an image file.");
+      showError($("#catalog-item-error"), "Alege un fișier imagine.");
       input.value = "";
       return;
     }
     try {
       const imageBase64 = await compressImage(file);
       const variant = state.catalogVariants.find((item) => item.id === input.closest("[data-variant-row]")?.dataset.variantId);
-      if (!variant) throw new Error("Could not match this image to its color variant.");
+      if (!variant) throw new Error("Imaginea nu a putut fi asociată variantei de culoare.");
       variant.imageBase64 = imageBase64;
       input.closest("[data-variant-row]").querySelector(".variant-image-preview").innerHTML =
         `<img src="data:image/jpeg;base64,${escapeHtml(imageBase64)}" alt="${escapeHtml(variant.color)} variant preview">`;
@@ -2971,8 +3031,8 @@ function initializeAppUi() {
   $("#cancel-category-edit").addEventListener("click", () => {
     state.editingCategoryId = null;
     $("#category-form").reset();
-    $("#category-input-label").textContent = "New category";
-    $("#save-category-button").textContent = "Add category";
+    $("#category-input-label").textContent = "Categorie nouă";
+    $("#save-category-button").textContent = "Adaugă categoria";
     $("#cancel-category-edit").hidden = true;
     clearError($("#category-form-error"));
   });
@@ -3050,7 +3110,7 @@ function initializeAppUi() {
     const file = event.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) {
-      showError($("#inventory-form-error"), "Choose an image file.");
+      showError($("#inventory-form-error"), "Alege un fișier imagine.");
       event.target.value = "";
       return;
     }
@@ -3113,7 +3173,7 @@ if (!isFirebaseConfigured) {
   }, (error) => {
     console.error("Could not verify sign-in state.", error);
     setScreen("login");
-    showError($("#login-error"), `Could not verify your sign-in: ${error.message}`);
+    showError($("#login-error"), `Nu s-a putut verifica autentificarea: ${error.message}`);
   });
 }
 

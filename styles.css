@@ -179,6 +179,11 @@ input[type="checkbox"] { width: 18px; min-height: 18px; height: 18px; accent-col
 .brand small { display: block; margin-top: 2px; color: var(--muted); font-size: 0.68rem; font-weight: 600; }
 .topbar-actions { display: flex; align-items: center; gap: 10px; }
 .primary-navigation { display: inline-flex; align-items: center; gap: 4px; }
+.home-menu-wrap { position: relative; }
+.home-menu { position: absolute; z-index: 10; top: calc(100% + 6px); left: 0; min-width: 190px; display: grid; gap: 3px; padding: 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); }
+.home-menu button { width: 100%; min-height: 40px; padding: 8px 11px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); text-align: left; }
+.home-menu button:hover, .home-menu button[aria-current="page"] { background: var(--blue-pale); color: var(--blue-dark); }
+.back-button { white-space: nowrap; }
 .topbar .mobile-menu-toggle { display: none; }
 .topbar .button[aria-current="page"] { border-color: #c5dce5; background: var(--blue-pale); }
 .user-email { max-width: 210px; overflow: hidden; color: var(--muted); font-size: 0.78rem; text-overflow: ellipsis; white-space: nowrap; }
@@ -306,8 +311,8 @@ input[type="checkbox"] { width: 18px; min-height: 18px; height: 18px; accent-col
 .settings-action-arrow { color: #8da3ad; font-size: 1.4rem; }
 .settings-action-danger .settings-action-icon { background: var(--red-pale); color: var(--red); }
 .settings-info-card { background: rgba(255,255,255,0.65); }
-.workspace-welcome { margin: 14px 0 26px; }
-.workspace-welcome h1 { margin: 0 0 8px; font-size: clamp(1.7rem, 4vw, 2.5rem); letter-spacing: -0.045em; }
+.workspace-welcome { margin: 8px 0 18px; }
+.workspace-welcome h1 { margin: 0 0 6px; font-size: clamp(1.25rem, 2.4vw, 1.65rem); letter-spacing: -0.035em; }
 .workspace-welcome > p:last-child { margin: 0; }
 .workspace-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .workspace-card { min-width: 0; min-height: 158px; display: flex; align-items: center; gap: 17px; padding: 23px; border: 1px solid var(--line); border-radius: 17px; background: var(--surface); color: var(--ink); text-align: left; box-shadow: 0 5px 18px rgba(34, 86, 108, 0.035); }
@@ -475,6 +480,10 @@ button.workspace-card:hover { transform: translateY(-2px); border-color: #b7d5e1
   .topbar-actions { display: none; min-width: 100%; flex: 1 0 100%; align-items: stretch; gap: 8px; padding: 8px 0 4px; border-top: 1px solid var(--line); }
   .topbar.is-menu-open .topbar-actions { display: flex; flex-direction: column; }
   .primary-navigation { display: grid; grid-template-columns: 1fr; gap: 4px; }
+  .home-menu-wrap { width: 100%; }
+  .home-menu { position: static; min-width: 0; margin: 2px 0 5px 10px; border: 0; border-left: 2px solid var(--line); border-radius: 0; box-shadow: none; }
+  .home-menu button { min-height: 38px; }
+  .back-button { min-height: 38px; padding: 7px 9px; font-size: 0.76rem; }
   .primary-navigation .button, .topbar-actions > .button { width: 100%; min-height: 42px; justify-content: flex-start; padding: 9px 12px; font-size: 0.86rem; text-align: left; }
   .topbar-actions .user-email { display: none; }
   .connection-status { align-self: flex-start; min-height: 20px; }
