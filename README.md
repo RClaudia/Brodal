@@ -15,7 +15,7 @@ After signing in, the main navigation includes only **Home**, **Settings**, and 
 
 ### Oblio proxy integration
 
-The static app never contains an Oblio `client_secret`. Configure the serverless proxy base URL as the GitHub Actions repository variable `VITE_OBLIO_PROXY_URL` (for example, `https://api.example.ro/api/oblio`). The Pages deployment workflow injects it directly into the published `app.js`; there is no endpoint settings field or extra config file in the app. The generated URL is delivered to browsers and is publicly visible, so use this variable only for the proxy URL, never for a client secret or other credential. Implement these proxy routes on a trusted server:
+The static app never contains an Oblio `client_secret`. Configure the serverless proxy base URL as the GitHub Actions variable `VITE_OBLIO_PROXY_URL` (or as a secret with the same name), for example `https://api.example.ro/api/oblio`. The Pages deployment workflow injects it directly into the published `app.js`; there is no endpoint settings field or extra config file in the app. The generated URL is delivered to browsers and is publicly visible, so use this only for the proxy URL, never for a client secret or other credential. Implement these proxy routes on a trusted server:
 
 - `POST /api/authorize/token` performs the Oblio OAuth2 token exchange using server-side credentials.
 - `GET /invoices?limit=20` returns recent invoices.
@@ -33,7 +33,7 @@ The rules template is for a single-owner inventory. If you later let multiple ac
 
 ## Run and deploy on GitHub Pages
 
-1. In repository **Settings → Secrets and variables → Actions → Variables → New repository variable**, add `VITE_OBLIO_PROXY_URL` with the HTTPS base URL of the Oblio proxy. The variable may be left unset if Oblio is not configured.
+1. In repository **Settings → Secrets and variables → Actions → Variables → New repository variable** (or **Secrets → New repository secret**), add `VITE_OBLIO_PROXY_URL` with the HTTPS base URL of the Oblio proxy. If it is configured under an Actions environment, use the `github-pages` environment selected by the workflow.
 2. In **Settings → Pages**, set the build and deployment source to **GitHub Actions**. The workflow at `.github/workflows/pages.yml` injects the configured proxy URL into `app.js` during deployment.
 3. Serve the repository over HTTP or HTTPS while testing; ES modules and service workers do not work from a `file://` URL. For example, use the static server feature of your editor.
 4. Commit and push the static files:

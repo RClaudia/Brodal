@@ -1681,7 +1681,7 @@ function renderOblioInvoices() {
 function oblioBaseUrl() {
   const endpoint = state.oblioProxyUrl.replace(/\/+$/, "");
   if (!endpoint) {
-    throw new Error("Proxy-ul Oblio nu este configurat. Adaugă VITE_OBLIO_PROXY_URL în GitHub Actions Variables și redeploy.");
+    throw new Error("Proxy-ul Oblio nu este configurat în versiunea publicată. Verifică VITE_OBLIO_PROXY_URL și rulează din nou workflow-ul GitHub Pages.");
   }
   let url;
   try {
@@ -3146,7 +3146,7 @@ function initializeAppUi() {
   configureLogin();
   setOblioStatus(state.oblioProxyUrl
     ? "Proxy-ul Oblio configurat pentru această aplicație este gata de utilizare."
-    : "Proxy-ul Oblio nu este configurat. Adaugă VITE_OBLIO_PROXY_URL în GitHub Actions Variables și redeploy.");
+    : "Proxy-ul Oblio nu este configurat în versiunea publicată. Verifică VITE_OBLIO_PROXY_URL și rulează din nou workflow-ul GitHub Pages.");
   $("#login-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     clearError($("#login-error"));

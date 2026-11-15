@@ -29,14 +29,31 @@ jobs:
 
       - name: Configure public app endpoint
         env:
-          VITE_OBLIO_PROXY_URL: ${{ vars.VITE_OBLIO_PROXY_URL }}
+          VITE_OBLIO_PROXY_URL: ${{ vars.VITE_OBLIO_PROXY_URL || secrets.VITE_OBLIO_PROXY_URL }}
         run: |
           python - <<'PY'
           import json
           import os
           from pathlib import Path
+          from urllib.parse import urlsplit
 
           endpoint = os.environ.get("VITE_OBLIO_PROXY_URL", "").strip()
+          if not endpoint:
+              raise SystemExit(
+                  "VITE_OBLIO_PROXY_URL is missing. Add it as a GitHub Actions variable "
+                  "or secret for the github-pages environment, then rerun this workflow."
+              )
+          parsed_endpoint = urlsplit(endpoint)
+          if (
+              parsed_endpoint.scheme != "https"
+              or not parsed_endpoint.hostname
+              or parsed_endpoint.username
+              or parsed_endpoint.password
+              or parsed_endpoint.query
+              or parsed_endpoint.fragment
+          ):
+              raise SystemExit("VITE_OBLIO_PROXY_URL must be an HTTPS proxy base URL without credentials, query, or fragment.")
+
           app_path = Path("app.js")
           app_source = app_path.read_text(encoding="utf-8")
           marker = '"__VITE_OBLIO_PROXY_URL__"'
