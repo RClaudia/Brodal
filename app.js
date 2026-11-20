@@ -195,8 +195,17 @@ function categoryLabel(category) {
   return ({ Brosa: "Broșă", Globulet: "Globuleț" })[category] ?? category;
 }
 
+function isNonSellingItem(item) {
+  return String(item.category ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLocaleLowerCase() === "material impachetare";
+}
+
 function soldQuantityForMarket(items) {
-  return items.reduce((total, item) => total + numberValue(item.soldQty), 0);
+  return items.reduce((total, item) =>
+    total + (isNonSellingItem(item) ? 0 : numberValue(item.soldQty)), 0);
 }
 
 function marketDurationDays(event) {
@@ -291,10 +300,10 @@ function renderMarketHistory() {
     yearMarkets.forEach((market) => {
       const cash = numberValue(market.cashIncome);
       const bank = numberValue(market.bankIncome);
-      const sold = typeof market.totalItemsSold === "number"
-        ? market.totalItemsSold
-        : state.marketHistoryHasInventoryTotals
-          ? numberValue(state.marketHistorySoldTotals[market.id])
+      const sold = state.marketHistoryHasInventoryTotals
+        ? numberValue(state.marketHistorySoldTotals[market.id])
+        : typeof market.totalItemsSold === "number"
+          ? market.totalItemsSold
           : null;
       totals.cash += cash;
       totals.bank += bank;
@@ -334,7 +343,9 @@ async function loadMarketHistoryInventoryTotals() {
     const totals = {};
     snapshot.docs.forEach((document) => {
       const item = document.data();
-      totals[item.marketId] = (totals[item.marketId] ?? 0) + numberValue(item.soldQty);
+      if (!isNonSellingItem(item)) {
+        totals[item.marketId] = (totals[item.marketId] ?? 0) + numberValue(item.soldQty);
+      }
     });
     state.marketHistorySoldTotals = totals;
     state.marketHistoryHasInventoryTotals = true;
@@ -2042,6 +2053,7 @@ function productActions(item) {
 
 function renderSummary() {
   const totals = state.inventory.reduce((summary, item) => {
+    if (isNonSellingItem(item)) return summary;
     const total = numberValue(item.totalQty);
     const sold = numberValue(item.soldQty);
     const price = numberValue(item.price);
@@ -2112,8 +2124,9 @@ function renderInventory() {
     const available = availableFor(item);
     const total = numberValue(item.totalQty);
     const sold = numberValue(item.soldQty);
-    const revenue = numberValue(item.price) * sold;
-    const potential = numberValue(item.price) * total;
+    const nonSelling = isNonSellingItem(item);
+    const revenue = nonSelling ? "—" : money.format(numberValue(item.price) * sold);
+    const potential = nonSelling ? "—" : money.format(numberValue(item.price) * total);
     return `<article class="product-card">
       <div class="product-card-top">
         <div class="product-thumb">${imageMarkup(item)}</div>
@@ -2121,14 +2134,15 @@ function renderInventory() {
           <h3>${escapeHtml(item.name)}</h3>
           <span class="sku-badge">${escapeHtml(item.sku)}</span>
           ${item.color ? `<span class="product-color-label">${escapeHtml(item.color)}</span>` : ""}
+          ${nonSelling ? `<span class="product-color-label">Doar evidență · nu se vinde</span>` : ""}
         </div>
         <span class="product-card-category">${escapeHtml(item.category)}</span>
       </div>
       <div class="product-card-price">${money.format(numberValue(item.price))}</div>
       <div class="product-card-stats">
         <div class="product-stat"><span>Disponibil</span><strong><span class="available-badge ${availableClass(available, total)}">${available}</span></strong></div>
-        <div class="product-stat"><span>Încasări</span><strong>${money.format(revenue)}</strong></div>
-        <div class="product-stat"><span>Valoare totală</span><strong>${money.format(potential)}</strong></div>
+        <div class="product-stat"><span>Încasări</span><strong>${revenue}</strong></div>
+        <div class="product-stat"><span>Valoare totală</span><strong>${potential}</strong></div>
       </div>
       <div class="product-card-quantities">
         <div class="product-quantity-control"><span>În stoc</span>${totalQuantityControls(item)}</div>
@@ -2145,17 +2159,18 @@ function renderInventory() {
     const available = availableFor(item);
     const total = numberValue(item.totalQty);
     const sold = numberValue(item.soldQty);
+    const nonSelling = isNonSellingItem(item);
     return `<tr>
       <td><div class="product-thumb">${imageMarkup(item)}</div></td>
       <td><span class="sku-badge">${escapeHtml(item.sku)}</span></td>
       <td class="product-name-cell" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}${item.color ? `<small class="product-color-label">${escapeHtml(item.color)}</small>` : ""}</td>
-      <td>${escapeHtml(categoryLabel(item.category))}</td>
+      <td>${escapeHtml(categoryLabel(item.category))}${nonSelling ? `<small class="product-color-label">Doar evidență · nu se vinde</small>` : ""}</td>
       <td>${money.format(numberValue(item.price))}</td>
       <td>${totalQuantityControls(item)}</td>
       <td><span class="available-badge ${availableClass(available, total)}">${available}</span></td>
       <td>${soldControls(item)}</td>
-      <td>${money.format(numberValue(item.price) * sold)}</td>
-      <td>${money.format(numberValue(item.price) * total)}</td>
+      <td>${nonSelling ? "—" : money.format(numberValue(item.price) * sold)}</td>
+      <td>${nonSelling ? "—" : money.format(numberValue(item.price) * total)}</td>
       <td>${productActions(item)}</td>
     </tr>`;
   }).join("");
@@ -3186,9 +3201,11 @@ async function changeSoldCount(id, delta) {
       soldQty: nextSold,
       updatedAt: serverTimestamp()
     });
-    toast(navigator.onLine
-      ? (delta > 0 ? "Vânzare înregistrată." : "Cantitatea vândută a fost actualizată.")
-      : (delta > 0 ? "Vânzare înregistrată local; se va sincroniza online." : "Cantitatea vândută a fost actualizată local; se va sincroniza online."));
+    toast(isNonSellingItem(item)
+      ? "Cantitatea urmărită a fost actualizată."
+      : navigator.onLine
+        ? (delta > 0 ? "Vânzare înregistrată." : "Cantitatea vândută a fost actualizată.")
+        : (delta > 0 ? "Vânzare înregistrată local; se va sincroniza online." : "Cantitatea vândută a fost actualizată local; se va sincroniza online."));
     void write.catch((error) => {
       console.error("Could not update sold quantity.", error);
       toast(`Nu s-a putut actualiza cantitatea vândută: ${error.message}`, true);
@@ -3256,6 +3273,7 @@ function exportCsv() {
     const cost = numberValue(item.unitCost);
     const total = numberValue(item.totalQty);
     const sold = numberValue(item.soldQty);
+    const nonSelling = isNonSellingItem(item);
     return [
       item.sku,
       item.name,
@@ -3266,9 +3284,9 @@ function exportCsv() {
       total,
       availableFor(item),
       sold,
-      (price * sold).toFixed(2),
-      (price * total).toFixed(2),
-      ((price - cost) * sold).toFixed(2),
+      (nonSelling ? 0 : price * sold).toFixed(2),
+      (nonSelling ? 0 : price * total).toFixed(2),
+      (nonSelling ? 0 : (price - cost) * sold).toFixed(2),
       item.notes
     ];
   });
