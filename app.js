@@ -2051,8 +2051,8 @@ function productActions(item) {
   </span>`;
 }
 
-function renderSummary() {
-  const totals = state.inventory.reduce((summary, item) => {
+function renderSummary(inventory) {
+  const totals = inventory.reduce((summary, item) => {
     if (isNonSellingItem(item)) return summary;
     const total = numberValue(item.totalQty);
     const sold = numberValue(item.soldQty);
@@ -2092,7 +2092,7 @@ function renderInventory() {
   const filtered = getFilteredInventory();
 
   loading.hidden = !state.inventoryLoading;
-  renderSummary();
+  renderSummary(filtered);
   renderCategoryPills();
   $("#inventory-count").textContent = event
     ? `${filtered.length} ${filtered.length === 1 ? "produs" : "produse"}${filtered.length !== state.inventory.length ? ` afișate · ${state.inventory.length} în total` : ""}${marketClosed ? " · Târg încheiat (doar pentru citire)" : ""}`
