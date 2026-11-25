@@ -43,6 +43,12 @@ const state = {
   materialsLoading: false,
   materialsSearch: "",
   editingMaterialId: null,
+  cashRegisterProducts: [],
+  cashRegisterUnsubscribe: null,
+  cashRegisterLoading: false,
+  cashRegisterError: "",
+  cashRegisterSearch: "",
+  editingCashRegisterId: null,
   selectedCategory: "All",
   search: "",
   sortBy: "sku",
@@ -858,6 +864,111 @@ function onMaterialAction(event) {
   if (materialAction === "used-minus") void changeMaterialUsedQuantity(id, -1);
 }
 
+function renderCashRegister() {
+  const search = state.cashRegisterSearch.trim().toLocaleLowerCase();
+  const products = state.cashRegisterProducts.filter((product) =>
+    !search || String(product.code ?? "").toLocaleLowerCase().includes(search)
+      || String(product.name ?? "").toLocaleLowerCase().includes(search)
+  ).sort((first, second) => skuCollator.compare(first.code || first.name, second.code || second.name));
+  const loading = state.cashRegisterLoading;
+  $("#cash-register-loading").hidden = !loading;
+  $("#cash-register-empty").hidden = loading || (!state.cashRegisterError && products.length > 0);
+  $("#cash-register-empty-title").textContent = state.cashRegisterError || (state.cashRegisterProducts.length ? "Nu s-au găsit produse" : "Nu există produse înregistrate");
+  $("#cash-register-empty-add-button").hidden = Boolean(state.cashRegisterError) || state.cashRegisterProducts.length > 0;
+  $("#cash-register-add-button").disabled = loading || Boolean(state.cashRegisterError);
+  $("#cash-register-table-wrap").hidden = loading || Boolean(state.cashRegisterError) || products.length === 0;
+  const actions = (product) => `<span class="row-actions">
+    <button class="text-button" type="button" data-cash-register-action="edit" data-id="${escapeHtml(product.id)}">Editează</button>
+    <button class="text-button danger" type="button" data-cash-register-action="delete" data-id="${escapeHtml(product.id)}">Șterge</button>
+  </span>`;
+  $("#cash-register-table-body").innerHTML = products.map((product) => `<tr>
+    <td>${escapeHtml(product.code || "—")}</td><td>${escapeHtml(product.name)}</td>
+    <td>${money.format(numberValue(product.price))}</td><td>${actions(product)}</td>
+  </tr>`).join("");
+  $("#cash-register-mobile-list").innerHTML = products.map((product) => `<article class="materials-mobile-card">
+    <div class="materials-mobile-card-heading"><div><h2>${escapeHtml(product.name)}</h2><p>${escapeHtml(product.code || "—")}</p></div><strong>${money.format(numberValue(product.price))}</strong></div>
+    <div class="materials-mobile-actions">${actions(product)}</div>
+  </article>`).join("");
+}
+
+function subscribeToCashRegister() {
+  state.cashRegisterUnsubscribe?.();
+  state.cashRegisterLoading = true;
+  state.cashRegisterError = "";
+  renderCashRegister();
+  state.cashRegisterUnsubscribe = onSnapshot(collection(db, "cash_register_products"), (snapshot) => {
+    state.cashRegisterProducts = snapshot.docs.map((product) => ({ id: product.id, ...product.data() }));
+    state.cashRegisterLoading = false;
+    state.cashRegisterError = "";
+    renderCashRegister();
+  }, (error) => {
+    state.cashRegisterLoading = false;
+    state.cashRegisterError = "Produsele nu au putut fi încărcate. Verifică conexiunea și regulile Firestore.";
+    state.cashRegisterProducts = [];
+    console.error("Could not load cash register products.", error);
+    renderCashRegister();
+  });
+}
+
+function openCashRegisterDialog(product = null) {
+  const form = $("#cash-register-form");
+  form.reset();
+  state.editingCashRegisterId = product?.id ?? null;
+  form.elements.code.value = product?.code ?? "";
+  form.elements.name.value = product?.name ?? "";
+  form.elements.price.value = product ? product.price : "";
+  $("#cash-register-form-title").textContent = product ? "Editează produsul" : "Adaugă produs";
+  clearError($("#cash-register-form-error"));
+  $("#cash-register-dialog").showModal();
+}
+
+async function handleCashRegisterSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const errorElement = $("#cash-register-form-error");
+  const button = $("#cash-register-save-button");
+  clearError(errorElement);
+  button.disabled = true;
+  try {
+    const code = form.elements.code.value.trim();
+    const name = form.elements.name.value.trim();
+    const price = Number(form.elements.price.value);
+    if (!name || !form.elements.price.value || !Number.isFinite(price) || price < 0) {
+      throw new Error("Completează denumirea și un preț valid.");
+    }
+    if (code && state.cashRegisterProducts.some((product) => product.id !== state.editingCashRegisterId && String(product.code ?? "").trim().toLocaleLowerCase() === code.toLocaleLowerCase())) {
+      throw new Error("Acest cod există deja în lista casei de marcat.");
+    }
+    const product = { code, name, price, updatedAt: serverTimestamp() };
+    if (state.editingCashRegisterId) await updateDoc(doc(db, "cash_register_products", state.editingCashRegisterId), product);
+    else await addDoc(collection(db, "cash_register_products"), { ...product, createdAt: serverTimestamp() });
+    $("#cash-register-dialog").close();
+    toast("Produsul casei de marcat a fost salvat.");
+  } catch (error) {
+    console.error("Could not save cash register product.", error);
+    showError(errorElement, error.message);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function onCashRegisterAction(event) {
+  const button = event.target.closest("[data-cash-register-action]");
+  if (!button) return;
+  const product = state.cashRegisterProducts.find((item) => item.id === button.dataset.id);
+  if (!product) return;
+  if (button.dataset.cashRegisterAction === "edit") openCashRegisterDialog(product);
+  if (button.dataset.cashRegisterAction === "delete" && window.confirm(`Ștergi produsul „${product.name}” din lista casei de marcat?`)) {
+    try {
+      await deleteDoc(doc(db, "cash_register_products", product.id));
+      toast("Produsul a fost șters din listă.");
+    } catch (error) {
+      console.error("Could not delete cash register product.", error);
+      toast(`Produsul nu a putut fi șters: ${error.message}`, true);
+    }
+  }
+}
+
 function showPage(name) {
   state.currentPage = name;
   state.currentModule = name === "hub" ? "hub" : name === "accounting" ? "accounting" : "inventory";
@@ -868,11 +979,12 @@ function showPage(name) {
   $("#market-history-page").hidden = name !== "market-history";
   $("#materials-page").hidden = name !== "materials";
   $("#items-page").hidden = name !== "items";
+  $("#cash-register-page").hidden = name !== "cash-register";
   $("#settings-page").hidden = name !== "settings";
   $(".mobile-action-bar").hidden = name !== "dashboard";
   $("#back-button").hidden = name === "hub";
   $("#settings-button").setAttribute("aria-current", name === "settings" ? "page" : "false");
-  $("#home-menu-button").setAttribute("aria-current", ["hub", "inventory-home", "dashboard", "market-history", "materials", "accounting", "items"].includes(name) ? "page" : "false");
+  $("#home-menu-button").setAttribute("aria-current", ["hub", "inventory-home", "dashboard", "market-history", "materials", "accounting", "items", "cash-register"].includes(name) ? "page" : "false");
   $("#home-menu").hidden = true;
   $("#home-menu-button").setAttribute("aria-expanded", "false");
   $("#home-menu").querySelectorAll("[data-nav-page]").forEach((button) => {
@@ -3403,8 +3515,18 @@ function initializeAppUi() {
     const card = event.target.closest("[data-module]");
     if (card?.dataset.module === "inventory") showPage("inventory-home");
     if (card?.dataset.module === "accounting") showPage("accounting");
+    if (card?.dataset.module === "cash-register") showPage("cash-register");
     if (event.target.closest('[data-home-page="items"]')) showPage("items");
   });
+  $("#cash-register-add-button").addEventListener("click", () => openCashRegisterDialog());
+  $("#cash-register-empty-add-button").addEventListener("click", () => openCashRegisterDialog());
+  $("#cash-register-search").addEventListener("input", (event) => {
+    state.cashRegisterSearch = event.currentTarget.value;
+    renderCashRegister();
+  });
+  $("#cash-register-form").addEventListener("submit", handleCashRegisterSubmit);
+  $("#cash-register-table-body").addEventListener("click", onCashRegisterAction);
+  $("#cash-register-mobile-list").addEventListener("click", onCashRegisterAction);
   $("#inventory-home-page").addEventListener("click", (event) => {
     if (event.target.closest('[data-inventory-page="markets"]')) showPage("dashboard");
     if (event.target.closest('[data-inventory-page="market-history"]')) showPage("market-history");
@@ -3717,7 +3839,7 @@ function initializeAppUi() {
   document.querySelectorAll("[data-close-dialog]").forEach((button) => {
     button.addEventListener("click", () => document.getElementById(button.dataset.closeDialog).close());
   });
-  [eventDialog, materialDialog, inventoryDialog, settingsDialog, importDialog, accountDialog, accountingDialog, productPickerDialog, productQuantityDialog, catalogItemDialog, categoryDialog, marketCloseDialog, pastMarketDialog, $("#fiscal-register-import-dialog")].forEach((dialog) => {
+  [eventDialog, materialDialog, inventoryDialog, settingsDialog, importDialog, accountDialog, accountingDialog, productPickerDialog, productQuantityDialog, catalogItemDialog, categoryDialog, marketCloseDialog, pastMarketDialog, $("#fiscal-register-import-dialog"), $("#cash-register-dialog")].forEach((dialog) => {
     dialog.addEventListener("click", (event) => {
       if (event.target === dialog) dialog.close();
     });
@@ -3741,6 +3863,7 @@ if (!isFirebaseConfigured) {
       setScreen("app");
       startCatalogListeners();
       subscribeToMaterials();
+      subscribeToCashRegister();
       subscribeToEvents();
       subscribeToAccountingEntries();
       subscribeToFiscalRegisterImports();
@@ -3749,12 +3872,19 @@ if (!isFirebaseConfigured) {
       state.catalogUnsubscribe?.();
       state.categoriesUnsubscribe?.();
       state.materialsUnsubscribe?.();
+      state.cashRegisterUnsubscribe?.();
       state.accountingUnsubscribe?.();
       state.fiscalRegisterImportsUnsubscribe?.();
       state.events = [];
       state.inventory = [];
       state.catalog = [];
       state.materials = [];
+      state.cashRegisterProducts = [];
+      state.cashRegisterLoading = false;
+      state.cashRegisterError = "";
+      state.cashRegisterSearch = "";
+      $("#cash-register-search").value = "";
+      renderCashRegister();
       state.categoryRecords = [];
       state.accountingEntries = [];
       state.fiscalRegisterImports = [];

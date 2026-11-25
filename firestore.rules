@@ -97,6 +97,20 @@ service cloud.firestore {
       allow delete: if isOwner();
     }
 
+    match /cash_register_products/{productId} {
+      function validProduct() {
+        return request.resource.data.keys().hasOnly(["code", "name", "price", "createdAt", "updatedAt"])
+          && request.resource.data.keys().hasAll(["code", "name", "price", "createdAt", "updatedAt"])
+          && request.resource.data.code is string && request.resource.data.code.size() <= 50
+          && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120
+          && request.resource.data.price is number && request.resource.data.price >= 0
+          && request.resource.data.updatedAt == request.time;
+      }
+      allow read, delete: if isOwner();
+      allow create: if isOwner() && validProduct() && request.resource.data.createdAt == request.time;
+      allow update: if isOwner() && validProduct() && request.resource.data.createdAt == resource.data.createdAt;
+    }
+
     match /materials/{materialId} {
       allow read: if isOwner();
       allow create: if isOwner()

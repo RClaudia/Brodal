@@ -63,6 +63,7 @@
                 <button type="button" data-nav-page="inventory-home">Inventar</button>
                 <button type="button" data-nav-page="accounting">Contabilitate</button>
                 <button type="button" data-nav-page="items">Produse</button>
+                <button type="button" data-nav-page="cash-register">Casa de Marcat</button>
               </div>
             </div>
             <button id="settings-button" class="button button-quiet settings-button" type="button">Setări</button>
@@ -100,6 +101,45 @@
             </span>
             <span class="workspace-arrow" aria-hidden="true">›</span>
           </button>
+          <button class="workspace-card workspace-card-items" type="button" data-module="cash-register">
+            <span class="workspace-icon" aria-hidden="true">▣</span>
+            <span class="workspace-card-copy">
+              <strong>Casa de Marcat</strong>
+              <small>Lista produselor și prețurilor din casa de marcat.</small>
+            </span>
+            <span class="workspace-arrow" aria-hidden="true">›</span>
+          </button>
+        </section>
+      </main>
+
+      <main id="cash-register-page" class="dashboard page-view" hidden>
+        <div class="page-heading">
+          <div>
+            <p class="eyebrow">CASA DE MARCAT</p>
+            <h1>Produse casa de marcat</h1>
+          </div>
+          <button id="cash-register-add-button" class="button button-primary" type="button">＋ Adaugă produs</button>
+        </div>
+        <section class="inventory-section">
+          <div class="filters">
+            <label class="search-wrap">
+              <span class="sr-only">Caută după cod sau denumire</span>
+              <span aria-hidden="true" class="search-icon">⌕</span>
+              <input id="cash-register-search" type="search" placeholder="Caută după cod sau denumire">
+            </label>
+          </div>
+          <div id="cash-register-loading" class="inline-loading" hidden><span class="spinner" aria-hidden="true"></span> Se încarcă produsele…</div>
+          <div id="cash-register-empty" class="empty-state" hidden>
+            <h3 id="cash-register-empty-title">Nu există produse înregistrate</h3>
+            <button id="cash-register-empty-add-button" class="button button-primary" type="button">＋ Adaugă produs</button>
+          </div>
+          <div id="cash-register-mobile-list" class="materials-mobile-list"></div>
+          <div id="cash-register-table-wrap" class="materials-table-wrap">
+            <table class="materials-table">
+              <thead><tr><th scope="col">Cod</th><th scope="col">Denumire produs</th><th scope="col">Preț (RON)</th><th scope="col">Acțiuni</th></tr></thead>
+              <tbody id="cash-register-table-body"></tbody>
+            </table>
+          </div>
         </section>
       </main>
 
@@ -660,6 +700,23 @@
         <button id="mobile-add-button" class="button button-primary button-wide" type="button">＋ Adaugă produs</button>
       </div>
     </div>
+
+    <dialog id="cash-register-dialog" class="app-dialog">
+      <form id="cash-register-form" class="dialog-content">
+        <div class="dialog-heading">
+          <div><p class="eyebrow">CASA DE MARCAT</p><h2 id="cash-register-form-title">Adaugă produs</h2></div>
+          <button class="icon-button" data-close-dialog="cash-register-dialog" type="button" aria-label="Închide">×</button>
+        </div>
+        <label>Cod în casa de marcat <span class="optional-label">Opțional</span><input name="code" type="text" maxlength="50"></label>
+        <label>Denumire produs<input name="name" type="text" maxlength="120" required></label>
+        <label>Preț (RON)<input name="price" type="number" min="0" step="0.01" inputmode="decimal" required></label>
+        <p id="cash-register-form-error" class="form-error" role="alert" hidden></p>
+        <div class="dialog-actions">
+          <button class="button button-quiet" data-close-dialog="cash-register-dialog" type="button">Anulează</button>
+          <button id="cash-register-save-button" class="button button-primary" type="submit">Salvează produsul</button>
+        </div>
+      </form>
+    </dialog>
 
     <dialog id="accounting-dialog" class="app-dialog">
       <form id="accounting-form" class="dialog-content accounting-form">
@@ -1244,6 +1301,6 @@
     </dialog>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="./app.js?v=43"></script>
+    <script type="module" src="./app.js?v=44"></script>
   </body>
 </html>
